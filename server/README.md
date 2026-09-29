@@ -6,17 +6,56 @@ What it does: a browser opens a WebSocket to `/ws?room=public` (or a private roo
 
 ## Deploy
 
-You need a Cloudflare account (free) and Node.
+You need a Cloudflare account (free, no card) and Node. The whole thing takes a few minutes; the steps below include the snags we hit the first time.
+
+### 1. Log in
 
 ```sh
 cd server
-npx wrangler login      # opens a browser the first time
+npx wrangler login
+```
+
+`npx` downloads wrangler on the fly. The command opens a browser tab asking you to allow wrangler access; click **Allow** and the terminal prints "Successfully logged in". On WSL, if no tab opens, copy the printed URL into a Windows browser; the redirect back to `localhost` still works.
+
+Run this in a real terminal. Wrangler asks questions on first use, and a non-interactive shell (a script, an editor task runner) cannot answer them and fails with an unhelpful error.
+
+### 2. Pick a workers.dev subdomain
+
+Every Worker on the account is served at `<worker-name>.<subdomain>.workers.dev`, and an account has exactly one subdomain. Before the first deploy, that subdomain has to exist. Two ways:
+
+- Open **Workers & Pages** in the dashboard (`https://dash.cloudflare.com/?to=/:account/workers/workers-and-pages`). The first visit offers to register one; pick a personal name such as your handle. The relay then lives at `https://tiny-transit-relay.<name>.workers.dev`.
+- Or let `npx wrangler deploy` ask you. It only asks in an interactive terminal; otherwise it tries to register one named after the current folder (`server`), which is taken, and stops with "Wrangler could not automatically register 'server' as your workers.dev subdomain".
+
+Choosing the name is worth a moment: it can be changed later, but that changes the URL of every Worker on the account, and the API refuses to replace an existing subdomain, so a rename means deleting it and registering again. Names are first come, first served across all of Cloudflare, so a short one may already be gone.
+
+### 3. Deploy
+
+```sh
 npx wrangler deploy
 ```
 
-The last line of the output is the Worker's URL, something like `https://tiny-transit-relay.<your-subdomain>.workers.dev`. Open `index.html`, find `RELAY_URL` near the top of the script, and set it to that URL with `wss://` in place of `https://`. Commit and push; GitHub Pages picks it up.
+This uploads `worker.js` and creates the Durable Object from `wrangler.toml`; confirm the migration if asked. The output ends with the Worker's URL:
 
-To try it before deploying, `npx wrangler dev` runs the same code locally on `ws://localhost:8787`, and opening the game with `?relay=ws://localhost:8787` points it there for that visit.
+```
+Deployed tiny-transit-relay triggers
+  https://tiny-transit-relay.<name>.workers.dev
+```
+
+Open that URL. It should say **Tiny Transit relay is up.** Right after a subdomain is registered, its TLS certificate takes a minute or two to issue; until then the browser shows a connection error and `curl` reports `sslv3 alert handshake failure`. Wait and retry, nothing is wrong.
+
+### 4. Point the game at it
+
+Open `index.html`, find `RELAY_URL` near the top of the script, and set it to the Worker's URL with `wss://` in place of `https://`:
+
+```js
+const RELAY_URL = new URLSearchParams(location.search).get('relay') || 'wss://tiny-transit-relay.<name>.workers.dev';
+```
+
+Commit and push; GitHub Pages rebuilds from `main` within a minute or two. The current build points at `wss://tiny-transit-relay.albey.workers.dev`.
+
+### Trying it locally
+
+`npx wrangler dev` runs the same code on `ws://localhost:8787`, and opening the game with `?relay=ws://localhost:8787` points it there for that visit. To test co-op alone, open the game in two windows, press **Copy link** in one, and open that link in the other.
 
 ## Notes
 
