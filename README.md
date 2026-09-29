@@ -34,3 +34,7 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 - Shared segments are drawn side by side; trains follow the offset path.
 - Best scores and the mute setting are kept in `localStorage` (per browser).
 - Light and dark themes follow the system setting.
+
+## License
+
+MIT. See `LICENSE`.
