@@ -154,8 +154,6 @@
   .swatches { display: flex; gap: 6px; }
   .swatches i { width: 22px; height: 8px; border-radius: 4px; display: inline-block; }
   .pill.partner { opacity: 0.5; cursor: default; }
-  .code { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; width: 100%; box-sizing: border-box; border: 1px solid var(--panel-border); border-radius: 10px; padding: 8px 10px; background: var(--bg); color: var(--ink); resize: vertical; word-break: break-all; }
-  .code:focus-visible { outline: 2px solid var(--accent); }
   @media (prefers-reduced-motion: no-preference) {
     .card { animation: pop 220ms ease-out; }
     @keyframes pop { from { transform: scale(0.97); opacity: 0.6; } to { transform: none; opacity: 1; } }
@@ -253,14 +251,12 @@
     <div class="card">
       <div class="stack">
         <div class="eyebrow">Co-op</div>
-        <h2>Play together</h2>
-        <p class="muted">Two browsers, one city. Each of you draws four colours; stations, tunnels and the game over are shared. There is no server: you swap two short codes over any chat to connect.</p>
+        <h2 id="coopTitle">Finding a partner</h2>
+        <p class="muted" id="coopText">Two browsers, one city. You each draw four colours; stations, tunnels and the game over are shared.</p>
       </div>
-      <div class="row" id="coopRole"><button class="btn primary" id="btnHost">Host a game</button><button class="btn quiet" id="btnJoin">Join a game</button></div>
-      <div class="stack" id="coopOut" hidden><span class="glbl" id="coopOutLbl"></span><textarea class="code" id="coopOutTa" readonly rows="3" aria-label="Your code"></textarea><div class="row"><button class="btn" id="btnCopyCode">Copy code</button></div></div>
-      <div class="stack" id="coopIn" hidden><span class="glbl" id="coopInLbl"></span><textarea class="code" id="coopInTa" rows="3" aria-label="Partner's code"></textarea><div class="row"><button class="btn primary" id="btnUseCode">Connect</button></div></div>
-      <p class="muted" id="coopStatus"></p>
-      <div class="row"><button class="btn quiet" id="btnCoopBack">Back</button></div>
+      <p id="coopStatus" aria-live="polite"></p>
+      <div class="stack" id="coopInvite"><span class="glbl">Or play with a friend</span><p class="muted">Send them this link. Whoever opens it joins you directly, skipping the queue.</p><div class="row"><button class="btn" id="btnCopyLink">Copy link</button></div></div>
+      <div class="row"><button class="btn quiet" id="btnCoopBack">Cancel</button></div>
     </div>
   </div>
 
@@ -319,7 +315,7 @@
     normal: { name: 'Normal', desc: 'A crowded station ends the run.' },
     zen: { name: 'Endless', desc: 'No game over. Overflowing passengers give up and leave.' },
     extreme: { name: 'Extreme', desc: 'Lines only grow. No retracting, removing, bypassing or opening loops.' },
-    coop: { name: 'Co-op', desc: 'Two browsers, one city. You each draw four colours and take turns picking upgrades.' },
+    coop: { name: 'Co-op', desc: 'Get matched with another player online. You each draw four colours on one shared city.' },
   };
   const PAD = { top: 84, side: 24 };
   const padBottomFor = (w) => (w < 600 ? 170 : 130);
@@ -346,10 +342,9 @@
     btnStart: $('btnStart'), btnDaily: $('btnDaily'), btnRules: $('btnRules'), btnAgain: $('btnAgain'), btnMenu: $('btnMenu'), btnCopy: $('btnCopy'),
     btnHelpClose: $('btnHelpClose'), btnLater: $('btnLater'), rewardNote: $('rewardNote'),
   };
-  const netUi = {
-    ov: $('coopOv'), role: $('coopRole'), out: $('coopOut'), outLbl: $('coopOutLbl'), outTa: $('coopOutTa'), in: $('coopIn'), inLbl: $('coopInLbl'), inTa: $('coopInTa'),
-    status: $('coopStatus'), host: $('btnHost'), join: $('btnJoin'), use: $('btnUseCode'), copy: $('btnCopyCode'), back: $('btnCoopBack'), phase: null,
-  };
+  const netUi = { ov: $('coopOv'), title: $('coopTitle'), text: $('coopText'), status: $('coopStatus'), invite: $('coopInvite'), copyLink: $('btnCopyLink'), back: $('btnCoopBack') };
+  // The co-op matchmaking relay (see server/). Deploy it, then put its URL here with wss://. `?relay=` overrides it for a visit.
+  const RELAY_URL = new URLSearchParams(location.search).get('relay') || 'wss://tiny-transit-relay.example.workers.dev';
 
   let W = 0, H = 0, DPR = 1;
   let G = null;
@@ -864,7 +859,7 @@
       ui.overEyebrow.textContent = `Connection lost · ${when}`;
       ui.overTitle.textContent = 'Your partner dropped off the map';
       ui.overSub.textContent = 'The network kept running until the link went quiet.';
-      ui.overTip.textContent = 'Host again and swap fresh codes to play another round together.';
+      ui.overTip.textContent = 'Play again to find a new partner, or send a friend the invite link.';
     } else {
       ui.overEyebrow.textContent = `Run ended · ${when}`;
       ui.overTitle.textContent = 'You closed the network on your own terms';
@@ -1270,7 +1265,7 @@
   ui.btnHelp.addEventListener('click', () => { if (!G || G.modal) return; helpFrom = G.started ? 'game' : 'start'; G.modal = 'help'; ui.helpOv.hidden = false; });
   ui.btnRules.addEventListener('click', () => { helpFrom = 'start'; ui.startOv.hidden = true; ui.helpOv.hidden = false; });
   ui.btnHelpClose.addEventListener('click', () => { ui.helpOv.hidden = true; if (helpFrom === 'start') ui.startOv.hidden = false; if (G && G.modal === 'help') G.modal = null; });
-  ui.btnStart.addEventListener('click', () => { unlockAudio(); if (pick.mode === 'coop') openCoop(); else launch(pick.city, pick.mode, (Math.random() * 1e9) | 0, false); });
+  ui.btnStart.addEventListener('click', () => { unlockAudio(); if (pick.mode === 'coop') openCoop(null); else launch(pick.city, pick.mode, (Math.random() * 1e9) | 0, false); });
   ui.btnDaily.addEventListener('click', () => { unlockAudio(); const s = todaySeed(); launch(dailyCity(s), 'normal', s, true); });
   ui.btnAgain.addEventListener('click', () => {
     if (G.coop) { ui.overOv.hidden = true; playAgainCoop(); return; }
@@ -1311,7 +1306,7 @@
       b.addEventListener('click', () => { pick.mode = k; renderStart(); });
       ui.modePick.appendChild(b);
     }
-    ui.btnStart.textContent = pick.mode === 'coop' ? 'Play together' : 'Start';
+    ui.btnStart.textContent = pick.mode === 'coop' ? 'Find a partner' : 'Start';
     const s = todaySeed(), db = parseInt(store.get(`tt_best_daily_${s}`, '0'), 10) || 0;
     const bestHere = parseInt(store.get(`tt_best_${pick.city}_${pick.mode}`, '0'), 10) || 0;
     ui.dailyNote.textContent = `Today's daily is ${CITIES[dailyCity(s)].name} in Normal, the same map for everyone${db ? `. Your best today: ${db}` : ''}. ${bestHere ? `Best in ${CITIES[pick.city].name} ${MODES[pick.mode].name}: ${bestHere}.` : ''}`;
@@ -1579,11 +1574,10 @@
   window.addEventListener('resize', resize);
 
   // ---------- co-op networking ----------
-  // Deterministic lockstep over a WebRTC data channel: only commands travel, and each peer runs the same simulation.
-  // Time is cut into turns of TURN_MS. A command issued during turn n is applied by both peers at turn n + INPUT_DELAY,
-  // host's commands first, so neither side ever needs the other's state. Signalling is by hand: the two peers swap
-  // their session descriptions as pasted codes, which keeps the game a single static file.
-  const RTC_CFG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+  // Deterministic lockstep over a WebSocket relay (server/worker.js): only commands travel, and each peer runs the
+  // same simulation. Time is cut into turns of TURN_MS. A command issued during turn n is applied by both peers at
+  // turn n + INPUT_DELAY, host's commands first, so neither side ever needs the other's state. The relay pairs the
+  // first two arrivals in a room and forwards messages between them; it never reads the game.
   const HEARTBEAT_MS = 1000, LOST_AFTER_MS = 10000;
   function stateHash(g) {
     let pax = 0;
@@ -1591,7 +1585,8 @@
     for (const tr of g.trains) pax += tr.passengers.length * 7;
     return [Math.round(g.t * 1000), g.score, g.stations.length, g.lines.length, g.trains.length, pax, g.nextId, g.tunnelsUsed, g.week].join(',');
   }
-  function netSend(m) { if (net && net.ch && net.ch.readyState === 'open') net.ch.send(JSON.stringify(m)); }
+  const netOpen = () => !!(net && net.ws && net.ws.readyState === WebSocket.OPEN && net.paired && !net.lost);
+  function netSend(m) { if (net && net.ws && net.ws.readyState === WebSocket.OPEN) net.ws.send(JSON.stringify(m)); }
   function resetTurns() { Object.assign(net, { turn: 0, acc: 0, queued: [], local: new Map(), inbox: new Map(), hashes: new Map(), theirHashes: new Map(), desync: false, waiting: false }); }
   function runTurn() {
     const n = net.turn;
@@ -1609,7 +1604,7 @@
   function checkSync(n) {
     const mine = net.hashes.get(n), theirs = net.theirHashes.get(n);
     net.hashes.delete(n); net.theirHashes.delete(n);
-    if (mine !== theirs && !net.desync) { net.desync = true; flash('The two maps have drifted apart. Finish this run and host a fresh one.', 8); }
+    if (mine !== theirs && !net.desync) { net.desync = true; flash('The two maps have drifted apart. Finish this run and find a fresh partner.', 8); }
   }
   function netFrame(ms) {
     net.acc = Math.min(net.acc + ms, 1000);
@@ -1626,103 +1621,67 @@
     net.lastSeen = performance.now();
     if (m.t === 'turn') net.inbox.set(m.n | 0, Array.isArray(m.c) ? m.c : []);
     else if (m.t === 'sync') { net.theirHashes.set(m.n | 0, String(m.h)); if (net.hashes.has(m.n | 0)) checkSync(m.n | 0); }
+    else if (m.t === 'waiting') netUi.status.textContent = net.room ? 'Waiting for your friend to open the link.' : 'Looking for another player. This can take a moment.';
+    else if (m.t === 'matched') {
+      me = m.me === 1 ? 1 : 0; net.paired = true;
+      if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: pick.city, seed }); beginCoop(pick.city, seed); }
+      else netUi.status.textContent = 'Partner found. Starting.';
+    }
     else if (m.t === 'start' && me === 1 && CITIES[m.city]) beginCoop(m.city, m.seed | 0);
+    else if (m.t === 'gone') onNetLost();
   }
   function beginCoop(city, seed) {
     resetTurns(); netUi.ov.hidden = true;
     launch(city, 'coop', seed, false);
     flash(`You are player ${me + 1}: ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}. Your partner draws the other colours.`, 8);
   }
-  function onNetOpen() {
-    if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: pick.city, seed }); beginCoop(pick.city, seed); }
-    else netUi.status.textContent = 'Connected. Waiting for the host to start.';
-  }
   function onNetLost() {
     if (!net || net.lost) return;
     net.lost = true;
     if (G && G.coop && G.started && !G.over) finishRun(G, null, 'lost');
-    else if (!netUi.ov.hidden) netUi.status.textContent = 'The connection was lost. Go back and try again.';
+    else if (!netUi.ov.hidden) netUi.status.textContent = net.paired ? 'Your partner left. Cancel and try again.' : 'Could not reach the matchmaking server. Check your connection and try again.';
   }
   function closeNet() {
     if (!net) return;
     const n = net; net = null; clearInterval(n.hb);
-    try { if (n.ch) n.ch.close(); } catch (e) { /* already closed */ }
-    try { n.pc.close(); } catch (e) { /* already closed */ }
+    try { if (n.ws) { n.ws.onclose = null; n.ws.close(); } } catch (e) { /* already closed */ }
   }
-  function newPeer() {
+  // Connect to the relay and wait in `room` (null for the public queue) until someone else arrives.
+  function connect(room) {
     closeNet();
-    const pc = new RTCPeerConnection(RTC_CFG);
-    net = { pc, ch: null, lost: false, lastSeen: performance.now(), hb: 0 }; resetTurns();
-    // WebRTC takes several seconds to notice a dropped peer; a heartbeat catches it sooner and keeps working from a background tab
+    let ws;
+    try { ws = new WebSocket(`${RELAY_URL.replace(/\/$/, '')}/ws?room=${encodeURIComponent(room || 'public')}`); }
+    catch (e) { netUi.status.textContent = 'The matchmaking server address is not valid.'; return; }
+    net = { ws, room, paired: false, lost: false, lastSeen: performance.now(), hb: 0 }; resetTurns();
+    ws.onmessage = onNetMessage;
+    ws.onclose = () => { if (net && net.ws === ws) onNetLost(); };
+    ws.onerror = () => { if (net && net.ws === ws) onNetLost(); };
+    // the relay forwards heartbeats too; a partner who goes quiet for LOST_AFTER_MS is treated as gone even if the socket lingers
     net.hb = setInterval(() => {
-      if (!net || net.pc !== pc || !net.ch || net.ch.readyState !== 'open') return;
+      if (!net || net.ws !== ws || !net.paired) return;
       netSend({ t: 'hb' });
       if (performance.now() - net.lastSeen > LOST_AFTER_MS) onNetLost();
     }, HEARTBEAT_MS);
-    pc.addEventListener('connectionstatechange', () => { if (net && net.pc === pc && ['failed', 'disconnected', 'closed'].includes(pc.connectionState)) onNetLost(); });
-    return pc;
   }
-  function attachChannel(ch) { net.ch = ch; ch.addEventListener('message', onNetMessage); ch.addEventListener('close', onNetLost); ch.addEventListener('open', () => { net.lastSeen = performance.now(); onNetOpen(); }); }
-  const gathered = (pc) => new Promise((res) => {
-    if (pc.iceGatheringState === 'complete') return res();
-    const t = setTimeout(res, 2500);
-    pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } });
-  });
-  const b64 = (u8) => { let s = ''; for (const b of u8) s += String.fromCharCode(b); return btoa(s); };
-  const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-  async function packCode(desc) {
-    const raw = new TextEncoder().encode(JSON.stringify({ type: desc.type, sdp: desc.sdp }));
-    try {
-      const cs = new CompressionStream('deflate-raw'); const w = cs.writable.getWriter(); w.write(raw); w.close();
-      return 'Z' + b64(new Uint8Array(await new Response(cs.readable).arrayBuffer()));
-    } catch (e) { return 'R' + b64(raw); }
-  }
-  async function unpackCode(code) {
-    code = code.replace(/\s+/g, '');
-    const body = unb64(code.slice(1));
-    if (code[0] === 'R') return JSON.parse(new TextDecoder().decode(body));
-    const ds = new DecompressionStream('deflate-raw'); const w = ds.writable.getWriter(); w.write(body); w.close();
-    return JSON.parse(await new Response(ds.readable).text());
-  }
-  async function hostGame() {
-    me = 0; const pc = newPeer(); attachChannel(pc.createDataChannel('tt', { ordered: true }));
-    await pc.setLocalDescription(await pc.createOffer()); await gathered(pc);
-    showCode(await packCode(pc.localDescription), 'Send this code to your partner', 'Paste your partner\'s reply');
-    netUi.phase = 'answer';
-  }
-  async function joinGame(code) {
-    me = 1; const pc = newPeer(); pc.addEventListener('datachannel', (e) => attachChannel(e.channel));
-    await pc.setRemoteDescription(await unpackCode(code)); await pc.setLocalDescription(await pc.createAnswer()); await gathered(pc);
-    showCode(await packCode(pc.localDescription), 'Send this reply to the host', null);
-    netUi.status.textContent = 'Waiting for the host to paste your reply.';
-  }
-  async function acceptAnswer(code) { await net.pc.setRemoteDescription(await unpackCode(code)); netUi.status.textContent = 'Connecting.'; }
-  function openCoop() {
-    ui.startOv.hidden = true; netUi.ov.hidden = false; netUi.role.hidden = false; netUi.out.hidden = true; netUi.in.hidden = true;
-    netUi.status.textContent = ''; netUi.inTa.value = ''; netUi.phase = null;
-  }
-  function showCode(code, outLbl, inLbl) {
-    netUi.role.hidden = true; netUi.outTa.value = code; netUi.outLbl.textContent = outLbl; netUi.out.hidden = false; netUi.copy.textContent = 'Copy code';
-    netUi.in.hidden = !inLbl; if (inLbl) { netUi.inLbl.textContent = inLbl; netUi.inTa.value = ''; }
-    netUi.status.textContent = '';
+  const roomFromHash = () => { const m = /[#&]room=([a-z0-9-]{1,32})/i.exec(location.hash); return m ? m[1].toLowerCase() : null; };
+  const inviteLink = (room) => `${location.origin}${location.pathname}${location.search}#room=${room}`;
+  function openCoop(room) {
+    ui.startOv.hidden = true; ui.overOv.hidden = true; netUi.ov.hidden = false;
+    netUi.title.textContent = room ? 'Waiting for your friend' : 'Finding a partner';
+    netUi.status.textContent = 'Connecting.';
+    // a private room offers the same link again; the public queue offers a fresh one so a friend can skip the queue
+    const inviteRoom = room || Math.random().toString(36).slice(2, 8);
+    netUi.invite.hidden = false; netUi.copyLink.textContent = 'Copy link';
+    netUi.copyLink.onclick = () => { if (!room) { connect(inviteRoom); netUi.title.textContent = 'Waiting for your friend'; } copyText(inviteLink(inviteRoom), netUi.copyLink); };
+    connect(room);
   }
   function playAgainCoop() {
-    if (net && !net.lost && net.ch && net.ch.readyState === 'open') {
+    if (netOpen()) {
+      // the relay pair is still live: the host just deals a new map
       if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: G.city, seed }); beginCoop(G.city, seed); }
-      else { netUi.ov.hidden = false; netUi.role.hidden = true; netUi.out.hidden = true; netUi.in.hidden = true; netUi.status.textContent = 'Waiting for the host to start again.'; }
-    } else openCoop();
+      else { netUi.ov.hidden = false; netUi.title.textContent = 'Playing again'; netUi.status.textContent = 'Waiting for the host to deal a new map.'; netUi.invite.hidden = true; }
+    } else openCoop(net && net.room ? net.room : null);
   }
-  netUi.host.addEventListener('click', () => {
-    netUi.role.hidden = true; netUi.status.textContent = 'Preparing your code.';
-    hostGame().catch((e) => { netUi.status.textContent = 'Could not start: ' + e.message; netUi.role.hidden = false; });
-  });
-  netUi.join.addEventListener('click', () => { netUi.role.hidden = true; netUi.inLbl.textContent = 'Paste the host\'s code'; netUi.in.hidden = false; netUi.inTa.value = ''; netUi.phase = 'offer'; });
-  netUi.use.addEventListener('click', () => {
-    const code = netUi.inTa.value.trim(); if (!code) return;
-    netUi.status.textContent = 'Connecting.';
-    (netUi.phase === 'offer' ? joinGame(code) : acceptAnswer(code)).catch(() => { netUi.status.textContent = 'That code did not work. Check it was copied whole.'; });
-  });
-  netUi.copy.addEventListener('click', () => copyText(netUi.outTa.value, netUi.copy));
   netUi.back.addEventListener('click', () => { closeNet(); me = 0; netUi.ov.hidden = true; ui.startOv.hidden = false; });
 
   // ---------- rules list ----------
@@ -1792,6 +1751,8 @@
     } else {
       G = newGame(pick.city, pick.mode, (Math.random() * 1e9) | 0, false);
     }
+    const room = roomFromHash();
+    if (room) { pick.mode = 'coop'; renderStart(); openCoop(room); }
     requestAnimationFrame(frame);
   }
   if (window.claude && window.claude.hot && window.claude.hot.snapshot) {

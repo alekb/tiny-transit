@@ -1,0 +1,10 @@
+name = "tiny-transit-relay"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+[durable_objects]
+bindings = [{ name = "LOBBY", class_name = "Lobby" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Lobby"]

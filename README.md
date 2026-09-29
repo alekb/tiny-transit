@@ -6,7 +6,7 @@ A browser transit puzzle in the spirit of Mini Metro.
 
 Stations keep appearing; you draw lines between them and keep the passengers moving. When a station stays crowded for too long, the network shuts down.
 
-Single file, no build step, no dependencies. Open `index.html` in a browser, or serve the folder with any static server.
+Single file, no build step, no dependencies. Open `index.html` in a browser, or serve the folder with any static server. Co-op needs the small relay in `server/` (a Cloudflare Worker); everything else works from the file alone.
 
 ## Cities and modes
 
@@ -14,7 +14,7 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 - **Twin Rivers**: two rivers, three banks, four tunnels to start.
 - **Dry Basin**: no water, but stations arrive faster and crowds run heavier.
 - **Normal**: a crowded station ends the run. **Endless**: no game over, overflowing passengers give up and leave, end the run yourself for the recap. **Extreme**: lines only grow (no retracting, removing, bypassing or opening loops).
-- **Co-op**: two browsers, one city. Pick Co-op, then *Play together*. One player hosts and gets a code to send over any chat; the other joins by pasting it and sends back a reply code. There is no server: the two browsers talk directly (WebRTC), and the codes are how they find each other. Each player draws four colours (host: Red, Blue, Yellow, Green) and has their own depot; stations, tunnels and the game over are shared. Every Monday both players receive a locomotive and take turns choosing the upgrade. Both peers run the same simulation and only exchange edits, so a slow connection shows as a short pause, never as a different map. Some networks (symmetric NAT on both sides) cannot connect directly; there is no relay yet.
+- **Co-op**: two browsers, one city. Pick Co-op and *Find a partner*: you wait until another player does the same and the two of you are paired, or copy the invite link and send it to a friend, who joins you directly. Each player draws four colours (the first to arrive hosts: Red, Blue, Yellow, Green) and has their own depot; stations, tunnels and the game over are shared. Every Monday both players receive a locomotive and take turns choosing the upgrade. Both browsers run the same simulation and only exchange edits through a small relay, so a slow connection shows as a short pause, never as a different map. The relay is a Cloudflare Worker in `server/`; see `server/README.md` to deploy it and set `RELAY_URL` in `index.html`.
 - **Today's daily**: the same seeded map for everyone, chosen from the UTC date. It is laid out on a fixed reference map and fitted to your screen (turned on its side in portrait), and the stations that appear do not depend on how you play. Every other run is a fresh seed; the seed is shown in the recap so a map can be described.
 
 ## How to play
