@@ -462,7 +462,7 @@
   };
   const CITIES = {
     riverside: { name: 'Riverside', desc: 'One river. 3 tunnels.', short: '1 river · 3 tunnels', rivers: 1, tunnels: 3, stationRate: 1, passengerRate: 1 },
-    twinrivers: { name: 'Twin Rivers', desc: 'Two rivers, three banks. 4 tunnels.', short: '2 rivers · 4 tunnels', rivers: 2, tunnels: 4, stationRate: 1, passengerRate: 0.95 },
+    twinrivers: { name: 'Islands', desc: 'One river, islands. 4 tunnels.', short: 'River · islands · 4 tunnels', rivers: 1, islands: true, tunnels: 4, stationRate: 1, passengerRate: 0.95 },
     drybasin: { name: 'Dry Basin', desc: 'No water. Fast stations, heavy crowds.', short: 'No water · fast', rivers: 0, tunnels: 0, stationRate: 1.3, passengerRate: 1.15 },
   };
   const MODES = {
@@ -655,7 +655,7 @@
       stats: { byLine: {}, boardings: {}, longestWait: 0, waitSum: 0, waitN: 0, gaveUp: 0 },
       rides: null, linesAt: null,
     };
-    for (let i = 0; i < CITIES[city].rivers; i++) g.riversRef.push(makeRiver(g, i, CITIES[city].rivers));
+    if (CITIES[city].islands) g.riversRef = makeBraid(g); else if (CITIES[city].rivers) g.riversRef = [makeRiver(g)];
     syncScreen(g);
     for (let i = 0; i < 3; i++) addStation(g, 0);
     g.nextStationAt = 14 / CITIES[city].stationRate;
@@ -714,24 +714,64 @@
   }
 
   // ---------- rivers ----------
-  function makeRiver(g, k, count) {
+  // The river runs along the map's long axis (`pos`) and wanders across it (`off`) in straight runs and 45° bends,
+  // starting well past the edges so it still reaches them when the map is fitted to a different screen.
+  function riverFrame(g) {
     const { W: rw, H: rh, pb } = g.ref;
     const horizontal = rw >= rh;
-    const span = horizontal ? rw : rh;
-    const lo = horizontal ? PAD.top : PAD.side, hi = horizontal ? rh - pb : rw - PAD.side;
-    const usable = hi - lo;
-    const base = count === 1 ? 0.5 + (rng(g) - 0.5) * 0.24 : (k === 0 ? 0.33 : 0.67) + (rng(g) - 0.5) * 0.08;
-    // run well past the edges so the river still reaches them when the map is fitted to a different screen
-    let pos = -400, off = lo + base * usable;
-    const pt = (p, o) => (horizontal ? { x: p, y: o } : { x: o, y: p });
-    const pts = [pt(pos, off)];
-    while (pos < span + 400) {
-      pos += 90 + rng(g) * 150; pts.push(pt(pos, off));
-      const diag = 30 + rng(g) * 70, dir = rng(g) < 0.5 ? -1 : 1;
-      const target = Math.max(lo + usable * 0.15, Math.min(hi - usable * 0.15, off + dir * diag));
-      pos += Math.abs(target - off); off = target; pts.push(pt(pos, off));
-    }
+    const lo = horizontal ? PAD.top : PAD.side, hi = horizontal ? rh - pb : rw - PAD.side, usable = hi - lo;
+    return {
+      span: horizontal ? rw : rh, lo, usable,
+      pt: (p, o) => (horizontal ? { x: p, y: o } : { x: o, y: p }),
+      // keep the water `margin` short of the 15% edge bands so stations always have room on both shores
+      clamp: (o, margin = 0) => Math.max(lo + usable * 0.15 + margin, Math.min(hi - usable * 0.15 - margin, o)),
+    };
+  }
+  // One straight run and one bend, appended to pts; returns the new position and offset.
+  function wander(g, f, pts, pos, off, until = Infinity) {
+    pos = Math.min(pos + 90 + rng(g) * 150, until); pts.push(f.pt(pos, off));
+    const diag = 30 + rng(g) * 70, dir = rng(g) < 0.5 ? -1 : 1;
+    const target = f.clamp(off + dir * diag);
+    pos += Math.abs(target - off); off = target; pts.push(f.pt(pos, off));
+    return [pos, off];
+  }
+  function makeRiver(g) {
+    const f = riverFrame(g);
+    let pos = -400, off = f.lo + f.usable * (0.5 + (rng(g) - 0.5) * 0.24);
+    const pts = [f.pt(pos, off)];
+    while (pos < f.span + 400) [pos, off] = wander(g, f, pts, pos, off);
     return pts;
+  }
+  // One river that forks around one or two islands and rejoins. Each channel is its own polyline, so a line
+  // crossing an island pays one tunnel per channel; the channels bend away from the trunk at 45° and mirror each
+  // other, so they never cross it or each other. Islands are wide enough to hold a station with its clearance.
+  function makeBraid(g) {
+    const f = riverFrame(g);
+    const islands = [];
+    if (rng(g) < 0.5) islands.push({ start: f.span * (0.25 + rng(g) * 0.3), len: 340 + rng(g) * 160 });
+    else {
+      const first = { start: f.span * (0.12 + rng(g) * 0.1), len: 260 + rng(g) * 120 };
+      islands.push(first, { start: Math.max(first.start + first.len + 160, f.span * (0.52 + rng(g) * 0.1)), len: 260 + rng(g) * 120 });
+    }
+    const out = [];
+    let pos = -400, off = f.lo + f.usable * (0.5 + (rng(g) - 0.5) * 0.24);
+    let trunk = [f.pt(pos, off)];
+    for (const isl of islands) {
+      const half = 65 + rng(g) * 20; // half the distance between the two channels' centrelines
+      while (pos < isl.start - 160) [pos, off] = wander(g, f, trunk, pos, off, isl.start - 160);
+      // straighten onto a centreline both channels can bend away from without leaving the map
+      const c = f.clamp(off, half);
+      if (c !== off) { pos += Math.abs(c - off); off = c; trunk.push(f.pt(pos, off)); }
+      pos = Math.max(pos, isl.start); trunk.push(f.pt(pos, off));
+      out.push(trunk);
+      const end = pos + isl.len;
+      out.push([f.pt(pos, off), f.pt(pos + half, off - half), f.pt(end - half, off - half), f.pt(end, off)]);
+      out.push([f.pt(pos, off), f.pt(pos + half, off + half), f.pt(end - half, off + half), f.pt(end, off)]);
+      pos = end; trunk = [f.pt(pos, off)];
+    }
+    while (pos < f.span + 400) [pos, off] = wander(g, f, trunk, pos, off);
+    out.push(trunk);
+    return out;
   }
   function segIntersect(p, p2, q, q2) {
     const cr = (ax, ay, bx, by, cx, cy) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
@@ -1683,7 +1723,7 @@
 
   const MINIMAP = {
     riverside: '<svg viewBox="0 0 150 80" aria-hidden="true"><path d="M-5 44 L40 44 L62 24 L110 24 L130 40 L160 40" fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round"/><path d="M-5 44 L40 44 L62 24 L110 24 L130 40 L160 40" fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round"/><circle cx="30" cy="22" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M84 47 L90 58 L78 58 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="118" y="54" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
-    twinrivers: '<svg viewBox="0 0 150 80" aria-hidden="true"><path d="M-5 26 L50 26 L66 14 L160 14" fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round"/><path d="M-5 26 L50 26 L66 14 L160 14" fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round"/><path d="M-5 58 L60 58 L80 70 L160 70" fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round"/><path d="M-5 58 L60 58 L80 70 L160 70" fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round"/><circle cx="34" cy="42" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M104 36 L110 47 L98 47 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="126" y="38" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
+    twinrivers: '<svg viewBox="0 0 150 80" aria-hidden="true"><g fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"><path d="M-5 42 L36 42"/><path d="M36 42 L52 26 L96 26 L112 42"/><path d="M36 42 L52 58 L96 58 L112 42"/><path d="M112 42 L160 42"/></g><g fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"><path d="M-5 42 L36 42"/><path d="M36 42 L52 26 L96 26 L112 42"/><path d="M36 42 L52 58 L96 58 L112 42"/><path d="M112 42 L160 42"/></g><circle cx="74" cy="42" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M24 14 L30 25 L18 25 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="126" y="60" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
     drybasin: '<svg viewBox="0 0 150 80" aria-hidden="true"><circle cx="28" cy="26" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M76 20 L82 31 L70 31 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="112" y="24" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><circle cx="56" cy="58" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M124 52 L130 63 L118 63 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="82" y="56" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
   };
   function renderStart() {
@@ -1937,7 +1977,9 @@
     ctx.save(); if (dimAll) ctx.globalAlpha = 0.5;
     const sel = lineById(g, g.selectedLine);
     // rivers
-    for (const rv of g.rivers) { drawPath(ctx, rv, theme.riverBank, CFG.riverWidth); drawPath(ctx, rv, theme.river, CFG.riverWidth - 10); }
+    // banks first, then water, so channels meeting at a fork join without a bank seam
+    for (const rv of g.rivers) drawPath(ctx, rv, theme.riverBank, CFG.riverWidth);
+    for (const rv of g.rivers) drawPath(ctx, rv, theme.river, CFG.riverWidth - 10);
     // tunnel marks under lines
     if (hasRivers(g)) for (const line of g.lines) for (const cr of riverCrossings(g, line.path)) tunnelMark(ctx, cr);
     // placement halos
