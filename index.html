@@ -1645,11 +1645,12 @@
     if (hasRivers(g) && tunnelsAvail(g) === 0 && availableColors(g).length === 0) return 'No tunnels left. Route around the river, or pick Tunnels on Monday.';
     return 'Drag between two stations to draw a line, or drag a ready letter onto a station.';
   }
+  // The nearest pair of different shapes (a line between two triangles carries nobody); river crossings count as far.
   function coachPair(g) {
     let bestPair = null, bd = Infinity;
     for (let i = 0; i < g.stations.length; i++) for (let j = i + 1; j < g.stations.length; j++) {
       const a = g.stations[i], b = g.stations[j];
-      const d = Math.hypot(a.x - b.x, a.y - b.y) + (pairCrossings(g, a.id, b.id) ? 1000 : 0);
+      const d = Math.hypot(a.x - b.x, a.y - b.y) + (pairCrossings(g, a.id, b.id) ? 1000 : 0) + (a.shape === b.shape ? 1e6 : 0);
       if (d < bd) { bd = d; bestPair = [a, b]; }
     }
     return bestPair;
