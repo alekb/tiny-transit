@@ -63,7 +63,7 @@
   .hud-left { display: flex; flex-direction: column; gap: 4px; }
   .scoreRow { display: flex; align-items: baseline; gap: 10px; }
   .score { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.02em; }
-  .sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
   .hud-right { display: flex; align-items: center; gap: 12px; }
   .clockWrap { display: flex; align-items: center; gap: 10px; }
   .clock { position: relative; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--ink); background: conic-gradient(var(--ink) 0deg, transparent 0deg); box-sizing: border-box; flex-shrink: 0; }
@@ -217,6 +217,9 @@
   .choice span { font: 400 13px/1.4 var(--font); color: var(--muted); }
   .cardfoot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .cardfoot .btn.primary { height: 44px; min-width: 160px; }
+  .namerow { display: flex; gap: 8px; }
+  .namerow input { flex: 1 1 0; min-width: 0; height: 44px; border: 2px solid var(--divider); background: var(--bg); color: var(--ink); font: 800 15px var(--font); padding: 0 12px; box-sizing: border-box; }
+  .namerow input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid var(--divider); border-bottom: 2px solid var(--divider); }
   .stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px 12px 0; }
   .stat + .stat { border-left: 1px solid var(--hairline); padding-left: 12px; }
@@ -404,6 +407,7 @@
     <div class="card" role="dialog" aria-labelledby="coopTitle">
       <div class="stack"><div class="kicker">Co-op</div><h2 id="coopTitle">Finding a partner</h2><p class="muted" id="coopText">Two browsers, one city. You each draw four lines; stations, tunnels and the game over are shared.</p></div>
       <p id="coopStatus" aria-live="polite"></p>
+      <div class="stack"><label class="lbl" for="nameInput">Playing as</label><div class="namerow"><input id="nameInput" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" aria-describedby="nameHint"><button class="btn secondary" id="btnReroll" title="New random name" aria-label="New random name">New name</button></div><p class="muted" id="nameHint">Your partner sees this name. It is remembered on this device.</p></div>
       <div class="stack" id="coopInvite"><span class="lbl">Or play with a friend</span><p class="muted">Send them this link. Whoever opens it joins you directly, skipping the queue.</p><div><button class="btn secondary" id="btnCopyLink">Copy link</button></div></div>
       <div class="cardfoot"><button class="btn secondary" id="btnCoopBack">Cancel</button></div>
     </div>
@@ -483,7 +487,7 @@
     btnStart: $('btnStart'), btnDaily: $('btnDaily'), btnRules: $('btnRules'), btnRules2: $('btnRules2'), btnAgain: $('btnAgain'), btnMenu: $('btnMenu'), btnCopy: $('btnCopy'),
     btnHelpClose: $('btnHelpClose'), btnLater: $('btnLater'), rewardNote: $('rewardNote'), lineCap: $('lineCap'),
   };
-  const netUi = { ov: $('coopOv'), title: $('coopTitle'), text: $('coopText'), status: $('coopStatus'), invite: $('coopInvite'), copyLink: $('btnCopyLink'), back: $('btnCoopBack') };
+  const netUi = { ov: $('coopOv'), title: $('coopTitle'), text: $('coopText'), status: $('coopStatus'), invite: $('coopInvite'), copyLink: $('btnCopyLink'), back: $('btnCoopBack'), name: $('nameInput'), reroll: $('btnReroll') };
   // The co-op matchmaking relay (see server/). Deploy it, then put its URL here with wss://. `?relay=` overrides it for a visit.
   const RELAY_URL = new URLSearchParams(location.search).get('relay') || 'wss://tiny-transit-relay.albey.workers.dev';
 
@@ -506,6 +510,7 @@
   const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let me = 0;        // local player index: 0 in solo and for the co-op host, 1 for the guest
   let net = null;    // co-op connection and lockstep state; null in solo
+  let partnerName = null; // the partner's display name once it has arrived over the relay
 
   // ---------- messaging layers: coach (persistent), toast (2.4s), refusal (anchored) ----------
   function setCoach(text) {
@@ -546,6 +551,29 @@
   };
   const bestKey = (g) => (g.daily ? `tt_best_daily_${g.seed}` : `tt_best_${g.city}_${g.mode}`);
   const bestFor = (g) => parseInt(store.get(bestKey(g), '0'), 10) || 0;
+
+  // ---------- player names ----------
+  // Display only: names travel over the relay as text and never touch the simulation, so they cannot desync it.
+  const NAME_A = ['Brisk', 'Quiet', 'Night', 'Early', 'Swift', 'Late', 'Rainy', 'Sunny', 'Iron', 'Copper', 'Amber', 'Misty', 'Steady', 'Lucky', 'Rapid', 'Gentle'];
+  const NAME_B = ['Tram', 'Depot', 'Loop', 'Signal', 'Junction', 'Platform', 'Ticket', 'Carriage', 'Tunnel', 'Siding', 'Express', 'Shuttle', 'Terminus', 'Viaduct', 'Crossing', 'Timetable'];
+  const randomName = () => `${NAME_A[Math.floor(Math.random() * NAME_A.length)]} ${NAME_B[Math.floor(Math.random() * NAME_B.length)]}`;
+  const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
+  let playerName = cleanName(store.get('tt_name', '')) || randomName();
+  store.set('tt_name', playerName);
+  function setPlayerName(s) {
+    playerName = cleanName(s) || randomName();
+    store.set('tt_name', playerName);
+    if (netUi.name.value !== playerName) netUi.name.value = playerName;
+    if (net && net.paired) netSend({ t: 'name', name: playerName });
+  }
+  // If both players picked the same name, the guest is shown with a suffix on both screens.
+  const sameName = () => partnerName != null && partnerName === playerName;
+  const myLabel = () => (sameName() && me === 1 ? `${playerName} 2` : playerName);
+  const partnerLabel = () => (partnerName == null ? 'your partner' : sameName() && me === 0 ? `${partnerName} 2` : partnerName);
+  const partnerPoss = () => (partnerName == null ? 'your partner\'s' : `${partnerLabel()}'s`);
+  netUi.name.addEventListener('change', () => setPlayerName(netUi.name.value));
+  netUi.name.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); netUi.name.blur(); } });
+  netUi.reroll.addEventListener('click', () => setPlayerName(randomName()));
 
   // ---------- seeded randomness ----------
   // Separate streams keep the map (rngState) independent of passenger (paxState) and reward (rewardState) draws.
@@ -1048,10 +1076,10 @@
       sfx.over(); announce(`Network closed. The ${st.shape} station was crowded for too long.`, true);
     } else if (reason === 'lost') {
       ui.overEyebrow.textContent = `Connection lost · ${when}`;
-      ui.overTitle.textContent = 'Your partner dropped off the map';
+      ui.overTitle.textContent = `${cap1(partnerLabel())} dropped off the map`;
       ui.overSub.textContent = 'The network kept running until the link went quiet.';
       ui.overTip.textContent = 'Play again to find a new partner, or send a friend the invite link.';
-      g.failLabel = null; announce('Connection lost. Your partner left the game.', true);
+      g.failLabel = null; announce(`Connection lost. ${cap1(partnerLabel())} left the game.`, true);
     } else {
       ui.overEyebrow.textContent = `Run ended · ${when}`;
       ui.overTitle.textContent = 'You closed the network on your own terms';
@@ -1075,7 +1103,7 @@
     } else rows.push(['Longest wait', 'no passenger reached a station']);
     const topLine = Object.entries(g.stats.byLine).sort((a, b) => b[1] - a[1])[0];
     if (topLine) rows.push(['Top line', `${LINE_NAMES[topLine[0]]} · ${topLine[1]} carried`]);
-    if (g.coop) rows.push(['Carried', `you ${carriedBy(g, me)} · partner ${carriedBy(g, 1 - me)}`]);
+    if (g.coop) rows.push(['Carried', `${myLabel()} ${carriedBy(g, me)} · ${partnerLabel()} ${carriedBy(g, 1 - me)}`]);
     ui.overRecap.innerHTML = rows.map(([k, v]) => `<li><span>${k}</span><span>${v}</span></li>`).join('');
     ui.btnCopy.textContent = 'Copy score';
     // dock the card away from the failed station; phone: bottom sheet
@@ -1104,10 +1132,10 @@
   }
   function showReward(g) {
     const defs = rewardDefs(g), mine = rewardPicker(g) === me;
-    ui.rewardEyebrow.textContent = `Monday · Week ${g.week - 1} complete${g.coop ? (mine ? ' · your pick' : ' · your partner picks') : ''}`;
+    ui.rewardEyebrow.textContent = `Monday · Week ${g.week - 1} complete${g.coop ? (mine ? ' · your pick' : ` · ${partnerLabel()} picks`) : ''}`;
     ui.rewardNote.textContent = !g.coop ? 'The map is paused while you decide.'
       : mine ? 'You both get a locomotive; the upgrade goes to your depot.'
-      : 'You both get a locomotive. Your partner is choosing this week\'s upgrade.';
+      : `You both get a locomotive. ${cap1(partnerLabel())} is choosing this week's upgrade.`;
     ui.choices.innerHTML = ''; rewardPick = null;
     for (const k of g.rewardChoices) {
       const c = defs[k], b = document.createElement('button');
@@ -1122,7 +1150,7 @@
     }
     ui.btnTake.disabled = true; ui.btnTake.textContent = 'Take'; ui.btnTake.hidden = !mine;
     ui.rewardOv.hidden = false; closeMenu();
-    announce(mine ? `Monday. Choose one upgrade: ${g.rewardChoices.map((k) => defs[k].t).join(', ')}` : 'Monday. Your partner is choosing this week\'s upgrade.', false);
+    announce(mine ? `Monday. Choose one upgrade: ${g.rewardChoices.map((k) => defs[k].t).join(', ')}` : `Monday. ${cap1(partnerLabel())} is choosing this week's upgrade.`, false);
   }
   ui.btnTake.addEventListener('click', () => { if (G && rewardPick) { ui.btnTake.disabled = true; issue({ k: 'reward', choice: rewardPick }); } });
   // Shared effect of a reward pick by player p, then the local follow-up: prompt for whatever landed in this player's depot.
@@ -1139,7 +1167,7 @@
       if (k === 'line') { const li = nextLetter(g, p); toast(`Line ${LINE_NAMES[li]} ready`, li); }
       if (k === 'tunnel') toast(`Tunnels +2 · ${tunnelsAvail(g)}/${g.tunnelsTotal}`);
       if (k === 'carriage' || k === 'interchange') g.placeQueue.push(k);
-    } else toast(`Your partner chose ${{ line: 'a new line', carriage: 'a carriage', interchange: 'an interchange', tunnel: 'two tunnels' }[k]} · your locomotive is in the depot`);
+    } else toast(`${cap1(partnerLabel())} chose ${{ line: 'a new line', carriage: 'a carriage', interchange: 'an interchange', tunnel: 'two tunnels' }[k]} · your locomotive is in the depot`);
     nextPlacement(g);
   }
   const PLACE_TEXT = { loco: 'Placing a locomotive — tap a line on the map', carriage: 'Placing a carriage — tap a train', interchange: 'Placing an interchange — tap a station' };
@@ -1175,7 +1203,7 @@
         if (h && h.line.owner === me) { const trains = g.trains.filter((t) => t.lineId === h.line.id); trains.sort((a, b) => b.passengers.length / b.cars - a.passengers.length / a.cars || a.cars - b.cars); tr = trains[0] || null; }
       }
       if (!tr) { refuse('Tap a train', 'Or its line, for the fullest train'); return; }
-      if (lineById(g, tr.lineId).owner !== me) { refuse('That is your partner\'s train', 'Carriages go on your own lines'); return; }
+      if (lineById(g, tr.lineId).owner !== me) { refuse(`That is ${partnerPoss()} train`, 'Carriages go on your own lines'); return; }
       issue({ k: 'carriage', train: tr.id }); nextPlacement(g); return;
     }
     let line = null;
@@ -1183,7 +1211,7 @@
     if (st) { ensureRides(g); const ls = (g.linesAt.get(st.id) || []).filter((l) => l.owner === me); if (ls.length === 1) line = ls[0]; else if (ls.length > 1) { refuse('Several lines stop here', 'Tap the line itself'); return; } }
     if (!line) { const h = hitLine(g, x, y); if (h) line = h.line; }
     if (!line) { refuse('Tap a line'); return; }
-    if (line.owner !== me) { refuse('That is your partner\'s line', 'Locomotives go on your own lines'); return; }
+    if (line.owner !== me) { refuse(`That is ${partnerPoss()} line`, 'Locomotives go on your own lines'); return; }
     issue({ k: 'loco', line: line.id }); nextPlacement(g);
   }
 
@@ -1374,7 +1402,7 @@
     }
     const cap = hitCap(G, x, y);
     if (cap) {
-      if (cap.line.owner !== me) { refuse('That is your partner\'s line', `You draw ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}`); return; }
+      if (cap.line.owner !== me) { refuse(`That is ${partnerPoss()} line`, `You draw ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}`); return; }
       drag = { mode: 'extend', line: cap.line, end: cap.end }; return;
     }
     const st = hitStation(G, x, y);
@@ -1476,7 +1504,7 @@
   function breakLoop(line, pathSeg) {
     if (!G.lines.includes(line) || !line.loop) return;
     if (extreme(G)) { refuseExtreme(); return; }
-    if (line.owner !== me) { refuse('That is your partner\'s loop'); return; }
+    if (line.owner !== me) { refuse(`That is ${partnerPoss()} loop`); return; }
     issue({ k: 'unloop', line: line.id, seg: stationSegOfPathSeg(line, pathSeg) });
   }
   const overlayOpen = () => !ui.startOv.hidden || !ui.rewardOv.hidden || !ui.overOv.hidden || !ui.helpOv.hidden || !netUi.ov.hidden;
@@ -1495,7 +1523,7 @@
   });
   function removeSelectedLine() {
     const line = lineById(G, G.selectedLine); if (!line) return;
-    if (line.owner !== me) { refuse('That is your partner\'s line'); return; }
+    if (line.owner !== me) { refuse(`That is ${partnerPoss()} line`); return; }
     if (extreme(G)) { refuseExtreme(); return; }
     if (G.placing) stopPlacement(G);
     issue({ k: 'delete', line: line.id }); renderHud();
@@ -1607,12 +1635,12 @@
     if (g.placing === 'interchange') return 'Stations are lit. An interchange holds 12 and halves stopping time.';
     if (g.selectedLine) {
       const l = lineById(g, g.selectedLine);
-      if (l && l.owner !== me) { const n = g.trains.filter((t) => t.lineId === l.id).length; return `Line ${LINE_NAMES[l.color]} is your partner's: ${l.stations.length} stops, ${n} train${n === 1 ? '' : 's'}. You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}.`; }
+      if (l && l.owner !== me) { const n = g.trains.filter((t) => t.lineId === l.id).length; return `Line ${LINE_NAMES[l.color]} is ${partnerPoss()}: ${l.stations.length} stops, ${n} train${n === 1 ? '' : 's'}. You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}.`; }
       if (l) return `Line ${LINE_NAMES[l.color]} selected. ${extreme(g) ? 'Drag a cap to extend, or a midpoint onto a station to add a stop.' : 'Drag a cap to extend, a midpoint onto a station to add a stop, a stop away to bypass it.'}`;
     }
     if (g.loopCoachLine) { const l = lineById(g, g.loopCoachLine); if (l && l.loop) return `Line ${LINE_NAMES[l.color]} runs as a loop: one way, 25% faster. Long-press a segment to open it.`; g.loopCoachLine = null; }
     if (!g.everDrew && g.stations.length >= 2) { const p = coachPair(g); return p ? `Drag from the ${p[0].shape} to the ${p[1].shape}.` : 'Drag between two stations to draw a line.'; }
-    if (!myLines(g).length) return g.coop ? `You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}; your partner draws the rest. Drag between two stations to start.` : 'Passengers want a station of a different shape. Your first train takes them there.';
+    if (!myLines(g).length) return g.coop ? `You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}; ${partnerLabel()} draws the rest. Drag between two stations to start.` : 'Passengers want a station of a different shape. Your first train takes them there.';
     if (!myTrains(g).length) return 'Your line has no train. The next locomotive arrives on Monday.';
     if (hasRivers(g) && tunnelsAvail(g) === 0 && availableColors(g).length === 0) return 'No tunnels left. Route around the river, or pick Tunnels on Monday.';
     return 'Drag between two stations to draw a line, or drag a ready letter onto a station.';
@@ -1647,7 +1675,7 @@
         const b = document.createElement('button'); b.type = 'button';
         b.className = 'pill drawn partner' + (g.selectedLine === line.id ? ' selected' : '');
         b.style.setProperty('--c', LINE_CSS[i]); b.innerHTML = LINE_NAMES[i] + (line.loop ? LOOP_SVG : '');
-        b.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, your partner's, ${line.stations.length} stops${line.loop ? ', loop' : ''}${g.selectedLine === line.id ? ', selected' : ''}`);
+        b.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, ${partnerPoss()}, ${line.stations.length} stops${line.loop ? ', loop' : ''}${g.selectedLine === line.id ? ', selected' : ''}`);
         b.setAttribute('aria-pressed', String(g.selectedLine === line.id));
         b.addEventListener('click', () => { if (!interactive()) return; selectLine(g.selectedLine === line.id ? null : line.id); });
         ui.pills.appendChild(b); continue;
@@ -1709,7 +1737,7 @@
     const g = G; if (!g) return;
     ui.score.textContent = g.score;
     const modeTxt = g.daily ? 'Daily' : MODES[g.mode].name;
-    const tally = g.coop ? `you ${carriedBy(g, me)} · partner ${carriedBy(g, 1 - me)}` : `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)}`;
+    const tally = g.coop ? `${myLabel()} ${carriedBy(g, me)} · ${partnerLabel()} ${carriedBy(g, 1 - me)}` :`${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)}`;
     ui.scoreSub.textContent = isPhone() ? tally : `${tally} · ${CITIES[g.city].name} · ${modeTxt}`;
     const dayIdx = Math.floor(g.day) % 7, frac = g.day - Math.floor(g.day), paused = pausedNow(g), waiting = !paused && !!(net && net.waiting);
     ui.clock.classList.toggle('paused', paused);
@@ -1717,7 +1745,7 @@
     ui.dayname.textContent = isPhone() ? DAYS[dayIdx].slice(0, 3) : DAYS[dayIdx];
     const wk = isPhone()
       ? (paused ? `W${g.week} · paused` : waiting ? `W${g.week} · waiting` : `W${g.week} · D${Math.floor(g.day) + 1} · ${g.speed}×`)
-      : (paused ? `Week ${g.week} · paused` : waiting ? `Week ${g.week} · waiting for partner` : `Week ${g.week} · day ${Math.floor(g.day) + 1}`);
+      : (paused ? `Week ${g.week} · paused` : waiting ? `Week ${g.week} · waiting for ${partnerLabel()}` : `Week ${g.week} · day ${Math.floor(g.day) + 1}`);
     ui.weektxt.textContent = wk; ui.weektxt.classList.toggle('paused', paused || waiting);
     ui.clockWrap.setAttribute('aria-label', `${DAYS[dayIdx]}, week ${g.week} day ${Math.floor(g.day) + 1}, ${g.speed}× speed, ${Math.round(frac * 100)}% of the day${paused ? ', paused' : ''}`);
     ui.btnPause.textContent = g.paused ? 'Paused' : 'Pause'; ui.btnPause.classList.toggle('pausedCell', g.paused); ui.btnPause.setAttribute('aria-pressed', String(g.paused));
@@ -2034,8 +2062,10 @@
     if (m.t === 'turn') net.inbox.set(m.n | 0, Array.isArray(m.c) ? m.c : []);
     else if (m.t === 'sync') { net.theirHashes.set(m.n | 0, String(m.h)); if (net.hashes.has(m.n | 0)) checkSync(m.n | 0); }
     else if (m.t === 'waiting') netUi.status.textContent = net.room ? 'Waiting for your friend to open the link.' : 'Looking for another player. This can take a moment.';
+    else if (m.t === 'name') partnerName = cleanName(m.name) || 'Partner';
     else if (m.t === 'matched') {
       me = m.me === 1 ? 1 : 0; net.paired = true;
+      netSend({ t: 'name', name: playerName });
       if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: pick.city, seed }); beginCoop(pick.city, seed); }
       else netUi.status.textContent = 'Partner found. Starting.';
     }
@@ -2045,18 +2075,18 @@
   function beginCoop(city, seed) {
     resetTurns(); netUi.ov.hidden = true;
     launch(city, 'coop', seed, false);
-    toast(`You are player ${me + 1} · you draw ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}`);
+    toast(`You are ${myLabel()} · you draw ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}`);
     announce(`Co-op started. You are player ${me + 1} and draw lines ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}.`, false);
   }
   function onNetLost() {
     if (!net || net.lost) return;
     net.lost = true;
     if (G && G.coop && G.started && !G.over) finishRun(G, null, 'lost');
-    else if (!netUi.ov.hidden) netUi.status.textContent = net.paired ? 'Your partner left. Cancel and try again.' : 'Could not reach the matchmaking server. Check your connection and try again.';
+    else if (!netUi.ov.hidden) netUi.status.textContent = net.paired ? `${cap1(partnerLabel())} left. Cancel and try again.` :'Could not reach the matchmaking server. Check your connection and try again.';
   }
   function closeNet() {
     if (!net) return;
-    const n = net; net = null; clearInterval(n.hb);
+    const n = net; net = null; partnerName = null; clearInterval(n.hb);
     try { if (n.ws) { n.ws.onclose = null; n.ws.close(); } } catch (e) { /* already closed */ }
   }
   // Connect to the relay and wait in `room` (null for the public queue) until someone else arrives.
@@ -2082,6 +2112,7 @@
     ui.startOv.hidden = true; ui.overOv.hidden = true; netUi.ov.hidden = false;
     netUi.title.textContent = room ? 'Waiting for your friend' : 'Finding a partner';
     netUi.status.textContent = 'Connecting.';
+    netUi.name.value = playerName;
     // a private room offers the same link again; the public queue offers a fresh one so a friend can skip the queue
     const inviteRoom = room || Math.random().toString(36).slice(2, 8);
     netUi.invite.hidden = false; netUi.copyLink.textContent = 'Copy link';
