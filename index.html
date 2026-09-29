@@ -17,6 +17,7 @@
     --divider: rgba(32, 30, 29, 0.4); --hairline: rgba(32, 30, 29, 0.2); --panel: rgba(243, 242, 242, 0.94);
     --accent: #ec3013; --accent-deep: #ae1800; --on-accent: #ffffff;
     --river-bank: #d6dde3; --river: #e3e9ee; --grid: rgba(32, 30, 29, 0.06);
+    --own-a: #dde8f9; --own-b: #f8e0ee;
     --shadow: 0 12px 32px rgba(45, 43, 43, 0.22);
     --line-a: #0a5fd6; --line-b: #d98a00; --line-c: #1e8f5a; --line-d: #6d3fc4; --line-e: #0e93b5; --line-f: #c22e86; --line-g: #8a5a25; --line-h: #4a6a86;
     --on-line: #ffffff;
@@ -28,6 +29,7 @@
       --divider: rgba(241, 239, 232, 0.4); --hairline: rgba(241, 239, 232, 0.2); --panel: rgba(26, 25, 24, 0.94);
       --accent: #ff6a52; --accent-deep: #ffb3a3; --on-accent: #1a1918;
       --river-bank: #262c33; --river: #2c343d; --grid: rgba(241, 239, 232, 0.06);
+      --own-a: #22324a; --own-b: #46283a;
       --shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
       --line-a: #6aa6ff; --line-b: #ffb020; --line-c: #3ecf8a; --line-d: #a98cff; --line-e: #3fd0f0; --line-f: #ff6fc2; --line-g: #d29a5c; --line-h: #9bb6cc;
       --on-line: #1a1918; color-scheme: dark;
@@ -38,6 +40,7 @@
     --divider: rgba(241, 239, 232, 0.4); --hairline: rgba(241, 239, 232, 0.2); --panel: rgba(26, 25, 24, 0.94);
     --accent: #ff6a52; --accent-deep: #ffb3a3; --on-accent: #1a1918;
     --river-bank: #262c33; --river: #2c343d; --grid: rgba(241, 239, 232, 0.06);
+    --own-a: #22324a; --own-b: #46283a;
     --shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
     --line-a: #6aa6ff; --line-b: #ffb020; --line-c: #3ecf8a; --line-d: #a98cff; --line-e: #3fd0f0; --line-f: #ff6fc2; --line-g: #d29a5c; --line-h: #9bb6cc;
     --on-line: #1a1918; color-scheme: dark;
@@ -172,8 +175,10 @@
   .opt svg { width: 100%; height: auto; display: block; }
   .opt strong { font: 800 15px var(--font); }
   .opt span { font: 400 12px/1.35 var(--font); color: var(--muted); }
-  .optgrid.modes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .optgrid.modes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .optgrid.modes .opt { padding: 12px 10px; }
   .opt.online { border-left: 2px solid var(--ink); }
+  .opt.online + .opt.online { border-left: 1px solid var(--hairline); }
   .opt .kicker { font-size: 10px; }
   .swrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .sw { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font: 800 13px var(--font); color: var(--on-line); }
@@ -279,6 +284,11 @@
     .start h1 { font-size: 44px; }
     .start .pitch { font-size: 15px; }
     .cells2, .startBtns .btn.ghost, .foot { display: none; }
+    /* five modes: the three solo rules in one row, the two online modes in a row beneath, behind an ink rule */
+    .optgrid.modes { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .optgrid.modes .opt { grid-column: span 2; padding: 12px; }
+    .optgrid.modes .opt.online { grid-column: span 3; border-left: 0; border-top: 2px solid var(--ink); }
+    .optgrid.modes .opt.online + .opt.online { border-left: 1px solid var(--hairline); }
     .phoneOnly { display: flex; }
     .btn.primary { width: 100%; height: 52px; }
     .startBtns { flex-direction: column; align-items: stretch; }
@@ -405,7 +415,7 @@
 
   <div class="overlay center" id="coopOv" hidden>
     <div class="card" role="dialog" aria-labelledby="coopTitle">
-      <div class="stack"><div class="kicker">Co-op</div><h2 id="coopTitle">Finding a partner</h2><p class="muted" id="coopText">Two browsers, one city. You each draw four lines; stations, tunnels and the game over are shared.</p></div>
+      <div class="stack"><div class="kicker" id="coopKicker">Co-op</div><h2 id="coopTitle">Finding a partner</h2><p class="muted" id="coopText">Two browsers, one city. You each draw four lines; stations, tunnels and the game over are shared.</p></div>
       <p id="coopStatus" aria-live="polite"></p>
       <div class="stack"><label class="lbl" for="nameInput">Playing as</label><div class="namerow"><input id="nameInput" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" aria-describedby="nameHint"><button class="btn secondary" id="btnReroll" title="New random name" aria-label="New random name">New name</button></div><p class="muted" id="nameHint">Your partner sees this name. It is remembered on this device.</p></div>
       <div class="stack" id="coopInvite"><span class="lbl">Or play with a friend</span><p class="muted">Send them this link. Whoever opens it joins you directly, skipping the queue.</p><div><button class="btn secondary" id="btnCopyLink">Copy link</button></div></div>
@@ -460,6 +470,7 @@
     zen: { name: 'Endless', desc: 'No game over. Overflow gives up and leaves.' },
     extreme: { name: 'Extreme', desc: 'Lines only grow. No retract, remove, bypass or open.' },
     coop: { name: 'Co-op', desc: 'Two players, one city. Four lines each.', online: true },
+    rivals: { name: 'Rivals', desc: 'Two players, one city. Score at your own stations.', online: true },
   };
   const PAD = { top: 84, side: 24 };
   const padBottomFor = (w) => (w < 720 ? 190 : 130);
@@ -487,7 +498,7 @@
     btnStart: $('btnStart'), btnDaily: $('btnDaily'), btnRules: $('btnRules'), btnRules2: $('btnRules2'), btnAgain: $('btnAgain'), btnMenu: $('btnMenu'), btnCopy: $('btnCopy'),
     btnHelpClose: $('btnHelpClose'), btnLater: $('btnLater'), rewardNote: $('rewardNote'), lineCap: $('lineCap'),
   };
-  const netUi = { ov: $('coopOv'), title: $('coopTitle'), text: $('coopText'), status: $('coopStatus'), invite: $('coopInvite'), copyLink: $('btnCopyLink'), back: $('btnCoopBack'), name: $('nameInput'), reroll: $('btnReroll') };
+  const netUi = { ov: $('coopOv'), kicker: $('coopKicker'), title: $('coopTitle'), text: $('coopText'), status: $('coopStatus'), invite: $('coopInvite'), copyLink: $('btnCopyLink'), back: $('btnCoopBack'), name: $('nameInput'), reroll: $('btnReroll') };
   // The co-op matchmaking relay (see server/). Deploy it, then put its URL here with wss://. `?relay=` overrides it for a visit.
   const RELAY_URL = new URLSearchParams(location.search).get('relay') || 'wss://tiny-transit-relay.albey.workers.dev';
 
@@ -497,7 +508,7 @@
   let hover = null, hoverCap = null, hoverHandle = null;
   let pointer = { x: 0, y: 0 };
   let pressTimer = null, pressPos = null, pressLoop = null;
-  let theme = { dark: false, ink: '#201e1d', bg: '#f3f2f2', muted: '#605d5d', accent: '#ec3013', riverBank: '#d6dde3', river: '#e3e9ee' };
+  let theme = { dark: false, ink: '#201e1d', bg: '#f3f2f2', muted: '#605d5d', accent: '#ec3013', riverBank: '#d6dde3', river: '#e3e9ee', own: ['#dde8f9', '#f8e0ee'] };
   let themeAt = 0;
   let pairSlots = new Map();
   let pick = { city: 'riverside', mode: 'normal' };
@@ -620,19 +631,21 @@
 
   // ---------- state ----------
   function newGame(city, mode, seed, daily) {
-    const coop = mode === 'coop', fixed = !!daily || coop;
+    // `coop` means two players in lockstep (Co-op and Rivals both); `rivals` adds station ownership and a per-player score.
+    const rivals = mode === 'rivals', coop = mode === 'coop' || rivals, fixed = !!daily || coop;
     // Stations and rivers live in `ref` coordinates (rx/ry, riversRef); x/y and rivers are their on-screen projection.
     // The daily and co-op use a fixed reference layout so every screen (and both peers) gets the same map.
     const ref = fixed ? { W: REF.W, H: REF.H, pb: padBottomFor(REF.W), transpose: W < H } : { W, H, pb: padBottom(), transpose: false };
     const startLines = coop ? CFG.coopStartLines : CFG.startLines;
-    const mkDepot = () => ({ linesAvail: startLines, linesTotal: startLines, locosAvail: startLines, carriagesAvail: 0, interchangesAvail: 0 });
+    // Rivals splits the city's tunnels between the players (rounded up) so neither can drain the other's budget.
+    const mkDepot = () => ({ linesAvail: startLines, linesTotal: startLines, locosAvail: startLines, carriagesAvail: 0, interchangesAvail: 0, tunnelsTotal: rivals ? Math.ceil(CITIES[city].tunnels / 2) : 0, tunnelsUsed: 0, score: 0, picked: null });
     const g = {
-      city, mode, seed, daily: !!daily, coop, fixed, rngState: seed | 0, paxState: (seed ^ 0x5bd1e995) | 0, rewardState: (seed ^ 0x27d4eb2d) | 0, ref,
+      city, mode, seed, daily: !!daily, coop, rivals, fixed, rngState: seed | 0, paxState: (seed ^ 0x5bd1e995) | 0, rewardState: (seed ^ 0x27d4eb2d) | 0, rewardState1: (seed ^ 0x165667b1) | 0, ref,
       t: 0, day: 0, week: 1, score: 0, dayDelivered: 0, lastDayIdx: 0, over: false, paused: false, speed: 1, started: false, rev: 0,
       stations: [], lines: [], trains: [], floats: [], leavers: [], rivers: [], riversRef: [], nextId: 1,
       depots: coop ? [mkDepot(), mkDepot()] : [mkDepot()],
       tunnelsTotal: CITIES[city].tunnels, tunnelsUsed: 0,
-      spawnAcc: 0, nextStationAt: 0, rareUsed: [], placing: null, placeQueue: [], modal: null, rewardChoices: null,
+      spawnAcc: 0, nextStationAt: 0, rareUsed: [], placing: null, placeQueue: [], modal: null, rewardChoices: null, rewardChoicesBy: null, rewardPending: null,
       selectedLine: null, everDrew: false, failedStation: null,
       stats: { byLine: {}, boardings: {}, longestWait: 0, waitSum: 0, waitN: 0, gaveUp: 0 },
       rides: null, linesAt: null,
@@ -659,13 +672,16 @@
   const lineById = (g, id) => g.lines.find((l) => l.id === id);
   const capOf = (st) => (st.interchange ? CFG.interchangeCap : CFG.stationCap);
   const hasRivers = (g) => g.riversRef.length > 0;
-  const tunnelsAvail = (g) => g.tunnelsTotal - g.tunnelsUsed;
   function bump(g) { g.rides = null; g.rev++; }
   const depot = (g, p = me) => g.depots[p];
+  // Tunnels are one shared budget except in Rivals, where each depot holds its own.
+  const tunnelsTotalOf = (g, p = me) => (g.rivals ? depot(g, p).tunnelsTotal : g.tunnelsTotal);
+  const tunnelsAvail = (g, p = me) => (g.rivals ? depot(g, p).tunnelsTotal - depot(g, p).tunnelsUsed : g.tunnelsTotal - g.tunnelsUsed);
   // Letters a player may draw: all eight solo; in co-op the host has A–D and the guest E–H.
   const colorsOf = (g, p) => LINE_NAMES.map((_, i) => i).filter((i) => !g.coop || (i < 4) === (p === 0));
   const maxLinesFor = (g) => (g.coop ? CFG.coopMaxLines : CFG.maxLines);
-  const rewardPicker = (g) => (g.coop ? (g.week % 2 === 0 ? 0 : 1) : 0);
+  // Who chooses this Monday's upgrade: alternating in Co-op, everyone for themselves in Rivals.
+  const rewardPicker = (g) => (g.rivals ? me : g.coop ? (g.week % 2 === 0 ? 0 : 1) : 0);
   const myLines = (g) => g.lines.filter((l) => l.owner === me);
   const myTrains = (g) => g.trains.filter((t) => { const l = lineById(g, t.lineId); return l && l.owner === me; });
   function carriedBy(g, p) { let n = 0; for (const c of colorsOf(g, p)) n += g.stats.byLine[c] || 0; return n; }
@@ -729,17 +745,21 @@
     return polyCrossings(g, octiPts({ x: lo.rx, y: lo.ry }, { x: hi.rx, y: hi.ry }));
   }
   function countTunnels(g) {
-    let n = 0;
-    for (const line of g.lines) { const N = line.stations.length, sc = line.loop ? N : N - 1; for (let i = 0; i < sc; i++) n += pairCrossings(g, line.stations[i], line.stations[(i + 1) % N]); }
-    g.tunnelsUsed = n;
+    let n = 0; const per = g.depots.map(() => 0);
+    for (const line of g.lines) {
+      const N = line.stations.length, sc = line.loop ? N : N - 1; let c = 0;
+      for (let i = 0; i < sc; i++) c += pairCrossings(g, line.stations[i], line.stations[(i + 1) % N]);
+      n += c; if (per[line.owner] != null) per[line.owner] += c;
+    }
+    g.tunnelsUsed = n; g.depots.forEach((d, i) => { d.tunnelsUsed = per[i]; });
   }
-  // Would adding `add` pairs and dropping `remove` pairs fit the tunnel budget?
-  function tunnelsFit(g, add, remove) {
+  // Would adding `add` pairs and dropping `remove` pairs fit player p's tunnel budget?
+  function tunnelsFit(g, add, remove, p = me) {
     if (!hasRivers(g)) return true;
     let net = 0;
     for (const [a, b] of add) net += pairCrossings(g, a, b);
     for (const [a, b] of remove || []) net -= pairCrossings(g, a, b);
-    return net <= tunnelsAvail(g);
+    return net <= tunnelsAvail(g, p);
   }
   function refuseTunnel(x, y) { refuse('No tunnels left', 'Retract a crossing or choose Tunnels on Monday', x, y); }
   function nearRiver(g, x, y, d) {
@@ -785,6 +805,8 @@
     if (!p) return null;
     const sp = toScreen(g, p);
     const st = { id: uid(g), rx: p.x, ry: p.y, x: sp.x, y: sp.y, shape: pickShape(g, sday), passengers: [], over: 0, warnAt: -9, interchange: false, born: g.t };
+    // Rivals: stations alternate owners in spawn order, host first, so the split never differs by more than one
+    if (g.rivals) st.owner = g.stations.length % 2;
     g.stations.push(st); bump(g);
     return st;
   }
@@ -911,7 +933,7 @@
     const avail = availableColors(g, p), d = depot(g, p);
     if (color == null || !avail.includes(color)) color = avail[0];
     if (color == null) return null;
-    if (!tunnelsFit(g, [[a, b]])) { if (p === me) refuseTunnel(); return null; }
+    if (!tunnelsFit(g, [[a, b]], null, p)) { if (p === me) refuseTunnel(); return null; }
     const line = { id: uid(g), color, owner: p, stations: [a, b], loop: false, path: [], cum: [], sIdx: [], stationDist: [], total: 0 };
     g.lines.push(line); d.linesAvail--; g.everDrew = true;
     rebuildAll(g); bump(g);
@@ -993,7 +1015,11 @@
       } else if (servesAhead(p.d)) keep.push(p);
       else st.passengers.push(p);
     }
-    if (delivered) { g.floats.push({ x: st.x, y: st.y - 22, t: 0, text: '+' + delivered, kind: 'deliver' }); g.streak = (g.streak || 0) + delivered; }
+    if (delivered) {
+      // Rivals: a delivery is a point for the station's owner, whoever's train brought it
+      if (g.rivals) g.depots[st.owner].score += delivered;
+      g.floats.push({ x: st.x, y: st.y - 22, t: 0, text: '+' + delivered, kind: 'deliver', owner: g.rivals ? st.owner : null }); g.streak = (g.streak || 0) + delivered;
+    }
     tr.passengers = keep;
     const cap = tr.cars * CFG.trainCap, wait = [];
     for (const p of st.passengers) {
@@ -1067,13 +1093,25 @@
       lines = g.linesAt.get(st.id) || [];
       const counts = {}; for (const p of st.passengers) counts[p.d] = (counts[p.d] || 0) + 1;
       const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-      ui.overEyebrow.textContent = `Network closed · ${when}`;
-      ui.overTitle.textContent = `The ${st.shape} station was crowded for too long`;
-      const reach = lines.length ? `Lines ${lines.map((l) => LINE_NAMES[l.color]).join(' and ')} called there. ` : 'No line reached it. ';
-      ui.overSub.textContent = `${reach}${st.passengers.length} passengers were waiting${top ? `, most of them for a ${top[0]}` : ''}.`;
-      ui.overTip.textContent = lines.length ? 'An interchange where two lines meet keeps a busy station breathing. A second locomotive on the line that loops back helps too.' : 'A station with no line fills fast. Drag the nearest cap to it as soon as it appears — the coach will point at it.';
-      g.failLabel = `${cap1(st.shape)} · ${lines.length ? 'line ' + lines.map((l) => LINE_NAMES[l.color]).join(', ') : 'no line'} · ${st.passengers.length} waiting`;
-      sfx.over(); announce(`Network closed. The ${st.shape} station was crowded for too long.`, true);
+      const lineTxt = lines.length ? 'line ' + lines.map((l) => LINE_NAMES[l.color]).join(', ') : 'no line';
+      if (g.rivals) {
+        // sudden death: the overflowing station's owner loses
+        const won = st.owner !== me, a = depot(g).score, b = depot(g, 1 - me).score, ownerName = st.owner === me ? myLabel() : partnerLabel();
+        ui.overEyebrow.textContent = `${won ? 'You win' : 'You lose'} · ${when}`;
+        ui.overTitle.textContent = won ? `${cap1(partnerPoss())} ${st.shape} station was crowded for too long` : `Your ${st.shape} station was crowded for too long`;
+        ui.overSub.textContent = won ? `You scored ${a} to ${partnerPoss()} ${b}.` : `${cap1(partnerLabel())} scored ${b} to your ${a}.`;
+        ui.overTip.textContent = won ? 'A rival\'s crowded station is your win. Their lines could not empty it in time.' : 'Get passengers out of your own stations first; the points come from the lines you draw to them.';
+        g.failLabel = `${cap1(st.shape)} · ${ownerName} · ${lineTxt} · ${st.passengers.length} waiting`;
+        sfx.over(); announce(`${won ? 'You win.' : 'You lose.'} ${ownerName}'s ${st.shape} station was crowded for too long.`, true);
+      } else {
+        ui.overEyebrow.textContent = `Network closed · ${when}`;
+        ui.overTitle.textContent = `The ${st.shape} station was crowded for too long`;
+        const reach = lines.length ? `Lines ${lines.map((l) => LINE_NAMES[l.color]).join(' and ')} called there. ` : 'No line reached it. ';
+        ui.overSub.textContent = `${reach}${st.passengers.length} passengers were waiting${top ? `, most of them for a ${top[0]}` : ''}.`;
+        ui.overTip.textContent = lines.length ? 'An interchange where two lines meet keeps a busy station breathing. A second locomotive on the line that loops back helps too.' : 'A station with no line fills fast. Drag the nearest cap to it as soon as it appears — the coach will point at it.';
+        g.failLabel = `${cap1(st.shape)} · ${lineTxt} · ${st.passengers.length} waiting`;
+        sfx.over(); announce(`Network closed. The ${st.shape} station was crowded for too long.`, true);
+      }
     } else if (reason === 'lost') {
       ui.overEyebrow.textContent = `Connection lost · ${when}`;
       ui.overTitle.textContent = `${cap1(partnerLabel())} dropped off the map`;
@@ -1090,9 +1128,10 @@
     ui.overScore.textContent = g.score;
     ui.overDays.textContent = Math.floor(g.day);
     ui.overStations.textContent = g.stations.length;
-    const prev = bestFor(g), isBest = g.score > prev;
+    // a won or lost match is not a score to beat, so Rivals records no personal best
+    const prev = bestFor(g), isBest = !g.rivals && g.score > prev;
     if (isBest) { store.set(bestKey(g), g.score); store.set('tt_pb', JSON.stringify({ score: g.score, city: g.city, mode: g.mode, week: g.week })); g.best = g.score; }
-    ui.overBest.textContent = Math.max(prev, g.score); ui.overBest.classList.toggle('dim', !isBest);
+    ui.overBest.textContent = g.rivals ? '–' : Math.max(prev, g.score); ui.overBest.classList.toggle('dim', !isBest);
     ui.overBestLbl.textContent = isBest ? 'new best' : 'best';
     const rows = [['Map', `${CITIES[g.city].name} · ${MODES[g.mode].name} · ${seedLabel(g)}`]];
     rows.push(['Lines drawn', g.lines.length ? g.lines.map((l) => `${LINE_NAMES[l.color]} (${l.stations.length} stops)`).join(' · ') : 'none']);
@@ -1103,7 +1142,10 @@
     } else rows.push(['Longest wait', 'no passenger reached a station']);
     const topLine = Object.entries(g.stats.byLine).sort((a, b) => b[1] - a[1])[0];
     if (topLine) rows.push(['Top line', `${LINE_NAMES[topLine[0]]} · ${topLine[1]} carried`]);
-    if (g.coop) rows.push(['Carried', `${myLabel()} ${carriedBy(g, me)} · ${partnerLabel()} ${carriedBy(g, 1 - me)}`]);
+    if (g.rivals) {
+      rows.push(['Score', `${myLabel()} ${depot(g).score} · ${partnerLabel()} ${depot(g, 1 - me).score}`]);
+      rows.push(['Stations', `${myLabel()} ${g.stations.filter((s) => s.owner === me).length} · ${partnerLabel()} ${g.stations.filter((s) => s.owner !== me).length}`]);
+    } else if (g.coop) rows.push(['Carried', `${myLabel()} ${carriedBy(g, me)} · ${partnerLabel()} ${carriedBy(g, 1 - me)}`]);
     ui.overRecap.innerHTML = rows.map(([k, v]) => `<li><span>${k}</span><span>${v}</span></li>`).join('');
     ui.btnCopy.textContent = 'Copy score';
     // dock the card away from the failed station; phone: bottom sheet
@@ -1117,27 +1159,36 @@
     line: { t: `Line ${LINE_NAMES[nextLetter(g, rewardPicker(g))]}`, d: 'A new colour in the tray, with its own train.', ic: `<span class="ic sw" style="background:${LINE_CSS[nextLetter(g, rewardPicker(g))]}">${LINE_NAMES[nextLetter(g, rewardPicker(g))]}</span>` },
     carriage: { t: 'Carriage', d: 'Adds 6 seats to the train you tap.', ic: `<span class="ic">${TOKEN_SVG.carriage}</span>` },
     interchange: { t: 'Interchange', d: 'One station holds 12 instead of 6, and trains stop there in half the time.', ic: `<span class="ic">${TOKEN_SVG.interchange}</span>` },
-    tunnel: { t: 'Tunnels ×2', d: `Two more river crossings. Budget goes ${tunnelsAvail(g)}/${g.tunnelsTotal} → ${tunnelsAvail(g) + 2}/${g.tunnelsTotal + 2}.`, ic: `<span class="ic">${TOKEN_SVG.tunnel}</span>` },
+    tunnel: { t: 'Tunnels ×2', d: `Two more river crossings. Budget goes ${tunnelsAvail(g)}/${tunnelsTotalOf(g)} → ${tunnelsAvail(g) + 2}/${tunnelsTotalOf(g) + 2}.`, ic: `<span class="ic">${TOKEN_SVG.tunnel}</span>` },
   });
   function nextLetter(g, p = me) { const used = new Set(g.lines.map((l) => l.color)), mine = colorsOf(g, p); return mine.find((i) => !used.has(i)) ?? mine[0]; }
   function offerReward(g) {
     g.modal = 'reward'; g.selectedLine = null; sfx.week();
-    const pool = [];
-    if (depot(g, rewardPicker(g)).linesTotal < maxLinesFor(g)) pool.push('line');
-    pool.push('carriage', 'interchange');
-    if (hasRivers(g)) pool.push('tunnel');
-    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng(g, 'rewardState') * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-    g.rewardChoices = pool.slice(0, 3);
+    if (g.rivals) {
+      // each player rolls three choices from their own stream and picks for themselves; the map waits for both
+      g.rewardChoicesBy = g.depots.map((_, p) => rollReward(g, p, p === 0 ? 'rewardState' : 'rewardState1'));
+      g.rewardPending = [true, true]; g.rewardChoices = null;
+    } else g.rewardChoices = rollReward(g, rewardPicker(g), 'rewardState');
     showReward(g);
   }
+  function rollReward(g, p, stream) {
+    const pool = [];
+    if (depot(g, p).linesTotal < maxLinesFor(g)) pool.push('line');
+    pool.push('carriage', 'interchange');
+    if (hasRivers(g)) pool.push('tunnel');
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng(g, stream) * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    return pool.slice(0, 3);
+  }
   function showReward(g) {
-    const defs = rewardDefs(g), mine = rewardPicker(g) === me;
+    const defs = rewardDefs(g), mine = g.rivals || rewardPicker(g) === me;
+    const choices = g.rivals ? g.rewardChoicesBy[me] : g.rewardChoices;
     ui.rewardEyebrow.textContent = `Monday · Week ${g.week - 1} complete${g.coop ? (mine ? ' · your pick' : ` · ${partnerLabel()} picks`) : ''}`;
     ui.rewardNote.textContent = !g.coop ? 'The map is paused while you decide.'
+      : g.rivals ? `${cap1(partnerLabel())} is choosing too. The map waits for both picks.`
       : mine ? 'You both get a locomotive; the upgrade goes to your depot.'
       : `You both get a locomotive. ${cap1(partnerLabel())} is choosing this week's upgrade.`;
     ui.choices.innerHTML = ''; rewardPick = null;
-    for (const k of g.rewardChoices) {
+    for (const k of choices) {
       const c = defs[k], b = document.createElement('button');
       b.className = 'choice'; b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false'); b.setAttribute('aria-pressed', 'false'); b.disabled = !mine;
       b.innerHTML = `${c.ic}<strong>${c.t}</strong><span>${c.d}</span>`;
@@ -1150,7 +1201,7 @@
     }
     ui.btnTake.disabled = true; ui.btnTake.textContent = 'Take'; ui.btnTake.hidden = !mine;
     ui.rewardOv.hidden = false; closeMenu();
-    announce(mine ? `Monday. Choose one upgrade: ${g.rewardChoices.map((k) => defs[k].t).join(', ')}` : `Monday. ${cap1(partnerLabel())} is choosing this week's upgrade.`, false);
+    announce(mine ? `Monday. Choose one upgrade: ${choices.map((k) => defs[k].t).join(', ')}` : `Monday. ${cap1(partnerLabel())} is choosing this week's upgrade.`, false);
   }
   ui.btnTake.addEventListener('click', () => { if (G && rewardPick) { ui.btnTake.disabled = true; issue({ k: 'reward', choice: rewardPick }); } });
   // Shared effect of a reward pick by player p, then the local follow-up: prompt for whatever landed in this player's depot.
@@ -1165,9 +1216,29 @@
     g.placeQueue.push('loco');
     if (p === me) {
       if (k === 'line') { const li = nextLetter(g, p); toast(`Line ${LINE_NAMES[li]} ready`, li); }
-      if (k === 'tunnel') toast(`Tunnels +2 · ${tunnelsAvail(g)}/${g.tunnelsTotal}`);
+      if (k === 'tunnel') toast(`Tunnels +2 · ${tunnelsAvail(g)}/${tunnelsTotalOf(g)}`);
       if (k === 'carriage' || k === 'interchange') g.placeQueue.push(k);
     } else toast(`${cap1(partnerLabel())} chose ${{ line: 'a new line', carriage: 'a carriage', interchange: 'an interchange', tunnel: 'two tunnels' }[k]} · your locomotive is in the depot`);
+    nextPlacement(g);
+  }
+  const REWARD_NOUN = { line: 'a new line', carriage: 'a carriage', interchange: 'an interchange', tunnel: 'two tunnels' };
+  // Rivals: each pick lands in its owner's depot at once; the locomotives and placement wait until both have picked.
+  function chooseRewardRivals(g, k, p) {
+    const d = depot(g, p); g.rewardPending[p] = false; d.picked = k;
+    if (k === 'line') { d.linesAvail++; d.linesTotal++; }
+    if (k === 'carriage') d.carriagesAvail++;
+    if (k === 'interchange') d.interchangesAvail++;
+    if (k === 'tunnel') d.tunnelsTotal += 2;
+    if (p === me) { ui.rewardOv.hidden = true; rewardPick = null; }
+    else toast(`${cap1(partnerLabel())} took ${REWARD_NOUN[k]}`);
+    if (g.rewardPending.some(Boolean)) return;
+    g.modal = null; g.rewardPending = null; g.rewardChoicesBy = null;
+    for (const dd of g.depots) dd.locosAvail++;
+    const mineK = depot(g).picked;
+    g.placeQueue.push('loco');
+    if (mineK === 'line') { const li = nextLetter(g); toast(`Line ${LINE_NAMES[li]} ready`, li); }
+    if (mineK === 'tunnel') toast(`Tunnels +2 · ${tunnelsAvail(g)}/${tunnelsTotalOf(g)}`);
+    if (mineK === 'carriage' || mineK === 'interchange') g.placeQueue.push(mineK);
     nextPlacement(g);
   }
   const PLACE_TEXT = { loco: 'Placing a locomotive — tap a line on the map', carriage: 'Placing a carriage — tap a train', interchange: 'Placing an interchange — tap a station' };
@@ -1232,7 +1303,7 @@
       case 'extend': {
         if (!own || line.loop || line.stations.includes(c.sid) || !stationById(g, c.sid)) return false;
         const endSid = c.end === 'head' ? line.stations[0] : line.stations[N - 1];
-        if (!tunnelsFit(g, [[endSid, c.sid]])) { if (local) refuseTunnel(); return false; }
+        if (!tunnelsFit(g, [[endSid, c.sid]], null, p)) { if (local) refuseTunnel(); return false; }
         if (c.end === 'head') line.stations.unshift(c.sid); else line.stations.push(c.sid);
         rebuildAll(g); bump(g); return true;
       }
@@ -1242,12 +1313,12 @@
         const endIdx = c.end === 'head' ? 0 : N - 1;
         const refund = pairCrossings(g, line.stations[endIdx], line.stations[c.end === 'head' ? 1 : N - 2]);
         line.stations.splice(endIdx, 1); rebuildAll(g); bump(g);
-        if (local && refund) toast(`Tunnel refunded · ${tunnelsAvail(g)}/${g.tunnelsTotal}`);
+        if (local && refund) toast(`Tunnel refunded · ${tunnelsAvail(g)}/${tunnelsTotalOf(g)}`);
         return true;
       }
       case 'loop':
         if (!own || line.loop || N < 3) return false;
-        if (!tunnelsFit(g, [[line.stations[0], line.stations[N - 1]]])) { if (local) refuseTunnel(); return false; }
+        if (!tunnelsFit(g, [[line.stations[0], line.stations[N - 1]]], null, p)) { if (local) refuseTunnel(); return false; }
         line.loop = true; rebuildAll(g); bump(g);
         if (local) { toast(`Loop closed on line ${LINE_NAMES[line.color]} · trains run one way`, line.color); if (!loopCoached) { loopCoached = true; g.loopCoachLine = line.id; } }
         return true;
@@ -1262,7 +1333,7 @@
         const st = stationById(g, c.sid);
         if (!own || !st || line.stations.includes(c.sid) || !(c.seg >= 0 && c.seg < (line.loop ? N : N - 1))) return false;
         const a = line.stations[c.seg], b = line.stations[(c.seg + 1) % N];
-        if (!tunnelsFit(g, [[a, c.sid], [c.sid, b]], [[a, b]])) { if (local) refuseTunnel(); return false; }
+        if (!tunnelsFit(g, [[a, c.sid], [c.sid, b]], [[a, b]], p)) { if (local) refuseTunnel(); return false; }
         line.stations.splice(c.seg + 1, 0, c.sid); rebuildAll(g); bump(g);
         if (local) toast(`Stop added to line ${LINE_NAMES[line.color]}`, line.color);
         return true;
@@ -1272,7 +1343,7 @@
         if (!own || extreme(g) || i < 0 || (!line.loop && (i === 0 || i === N - 1))) return false;
         if (line.loop && N <= 3) { if (local) refuse('Loops need at least three stops', 'Open the loop first'); return false; }
         const prev = line.stations[(i - 1 + N) % N], next = line.stations[(i + 1) % N];
-        if (!tunnelsFit(g, [[prev, next]], [[prev, c.sid], [c.sid, next]])) { if (local) refuseTunnel(); return false; }
+        if (!tunnelsFit(g, [[prev, next]], [[prev, c.sid], [c.sid, next]], p)) { if (local) refuseTunnel(); return false; }
         for (const tr of g.trains.filter((t) => t.lineId === line.id)) { const loc = locate(line, tr); if (loc && loc.from === c.sid && st) { st.passengers.push(...tr.passengers); tr.passengers = []; } }
         line.stations.splice(i, 1); rebuildAll(g); bump(g);
         if (local) toast(`Stop bypassed on line ${LINE_NAMES[line.color]}`, line.color);
@@ -1304,7 +1375,9 @@
         return true;
       }
       case 'reward':
-        if (g.modal !== 'reward' || rewardPicker(g) !== p || !g.rewardChoices || !g.rewardChoices.includes(c.choice)) return false;
+        if (g.modal !== 'reward') return false;
+        if (g.rivals) { if (!g.rewardPending || !g.rewardPending[p] || !g.rewardChoicesBy[p].includes(c.choice)) return false; chooseRewardRivals(g, c.choice, p); return true; }
+        if (rewardPicker(g) !== p || !g.rewardChoices || !g.rewardChoices.includes(c.choice)) return false;
         chooseReward(g, c.choice, p); return true;
       case 'pause': g.paused = !!c.on; announce(g.paused ? 'Paused' : 'Resumed', false); return true;
       case 'speed': g.speed = c.v === 2 ? 2 : 1; renderSpeed(); return true;
@@ -1536,7 +1609,7 @@
   function togglePause() { if (!G || G.over || G.modal) return; issue({ k: 'pause', on: !G.paused }); }
   function setSpeed(s) { if (!G || G.over) return; issue({ k: 'speed', v: s }); }
   function launch(city, mode, seed, daily) {
-    if (mode !== 'coop') { closeNet(); me = 0; }
+    if (!MODES[mode].online) { closeNet(); me = 0; }
     G = newGame(city, mode, seed, daily); G.started = true; loopCoached = false;
     acc = 0; renderSpeed(); closeMenu();
     ui.banner.hidden = true; ui.startOv.hidden = true; ui.overOv.hidden = true; ui.helpOv.hidden = true;
@@ -1572,7 +1645,7 @@
   ui.btnRules.addEventListener('click', () => openHelp('start'));
   ui.btnRules2.addEventListener('click', () => openHelp('start'));
   ui.btnHelpClose.addEventListener('click', () => { ui.helpOv.hidden = true; if (helpFrom === 'start') ui.startOv.hidden = false; if (G && G.modal === 'help') G.modal = null; });
-  ui.btnStart.addEventListener('click', () => { unlockAudio(); if (pick.mode === 'coop') openCoop(null); else launch(pick.city, pick.mode, (Math.random() * 1e9) | 0, false); });
+  ui.btnStart.addEventListener('click', () => { unlockAudio(); if (MODES[pick.mode].online) openCoop(null); else launch(pick.city, pick.mode, (Math.random() * 1e9) | 0, false); });
   ui.btnDaily.addEventListener('click', () => { unlockAudio(); const s = todaySeed(); launch(dailyCity(s), 'normal', s, true); });
   ui.btnAgain.addEventListener('click', () => {
     if (G.coop) { ui.overOv.hidden = true; playAgainCoop(); return; }
@@ -1615,7 +1688,7 @@
       b.addEventListener('click', () => { pick.mode = k; renderStart(); });
       ui.modePick.appendChild(b);
     }
-    ui.lineCap.textContent = pick.mode === 'coop' ? '4 lines each. Two to start, one more each Monday the upgrade is yours.' : '8 lines. Three to start, one more each Monday you choose it.';
+    ui.lineCap.textContent = pick.mode === 'rivals' ? '4 lines each. Half the tunnels each. Score at your own stations; lose one to crowding and you lose the match.' : pick.mode === 'coop' ? '4 lines each. Two to start, one more each Monday the upgrade is yours.' : '8 lines. Three to start, one more each Monday you choose it.';
     ui.swrow.innerHTML = LINE_NAMES.map((l, i) => `<span class="sw" style="background:${LINE_CSS[i]}">${l}</span>`).join('');
     const s = todaySeed(), db = parseInt(store.get(`tt_best_daily_${s}`, '0'), 10) || 0;
     ui.dailyName.textContent = `${CITIES[dailyCity(s)].name} · Normal`;
@@ -1625,14 +1698,24 @@
     ui.pbVal.textContent = pb ? `${pb.score} carried` : '0 carried';
     ui.pbWhere.textContent = pb ? `${CITIES[pb.city] ? CITIES[pb.city].name : ''} · ${MODES[pb.mode] ? MODES[pb.mode].name : ''} · Week ${pb.week}` : 'No runs yet';
     ui.pbPhone.textContent = pb ? `Personal best ${pb.score} · ${CITIES[pb.city] ? CITIES[pb.city].name : ''}` : 'No runs yet';
-    const verb = pick.mode === 'coop' ? 'Find a partner' : 'Start';
-    ui.btnStart.textContent = isPhone() ? `${verb} · ${CITIES[pick.city].name}${pick.mode === 'coop' ? '' : ' · ' + MODES[pick.mode].name}` : verb;
+    const verb = pick.mode === 'rivals' ? 'Find a rival' : pick.mode === 'coop' ? 'Find a partner' : 'Start';
+    ui.btnStart.textContent = isPhone() ? `${verb} · ${CITIES[pick.city].name}${MODES[pick.mode].online ? '' : ' · ' + MODES[pick.mode].name}` : verb;
   }
 
   function coachFor(g) {
+    if (g.rivals && g.modal === 'reward' && g.rewardPending) return `Waiting for ${partnerPoss()} Monday pick.`;
     if (g.placing === 'loco') { const lit = myLines(g).map((l) => LINE_NAMES[l.color]); return `${lit.length === 1 ? 'Line ' + lit[0] + ' is' : 'Lines ' + lit.slice(0, -1).join(', ') + ' and ' + lit.slice(-1) + ' are'} lit. The locomotive joins where the gap between trains is widest.`; }
     if (g.placing === 'carriage') return `${myTrains(g).length === 1 ? 'The train is' : g.coop ? 'All your trains are' : 'All trains are'} lit. A carriage adds 6 seats.`;
     if (g.placing === 'interchange') return 'Stations are lit. An interchange holds 12 and halves stopping time.';
+    if (g.rivals) {
+      // a crowding station is the whole match: yours is a warning, a rival's is an opening
+      const crowd = g.stations.find((s) => s.passengers.length > capOf(s));
+      if (crowd) {
+        ensureRides(g);
+        if (crowd.owner === me) return `Your ${crowd.shape} is crowding. Lose it and you lose the match.`;
+        if (!(g.linesAt.get(crowd.id) || []).some((l) => l.owner === me)) return `${cap1(partnerPoss())} ${crowd.shape} is crowding. Leave it, or draw there and take the deliveries.`;
+      }
+    }
     if (g.selectedLine) {
       const l = lineById(g, g.selectedLine);
       if (l && l.owner !== me) { const n = g.trains.filter((t) => t.lineId === l.id).length; return `Line ${LINE_NAMES[l.color]} is ${partnerPoss()}: ${l.stations.length} stops, ${n} train${n === 1 ? '' : 's'}. You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}.`; }
@@ -1640,7 +1723,7 @@
     }
     if (g.loopCoachLine) { const l = lineById(g, g.loopCoachLine); if (l && l.loop) return `Line ${LINE_NAMES[l.color]} runs as a loop: one way, 25% faster. Long-press a segment to open it.`; g.loopCoachLine = null; }
     if (!g.everDrew && g.stations.length >= 2) { const p = coachPair(g); return p ? `Drag from the ${p[0].shape} to the ${p[1].shape}.` : 'Drag between two stations to draw a line.'; }
-    if (!myLines(g).length) return g.coop ? `You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}; ${partnerLabel()} draws the rest. Drag between two stations to start.` : 'Passengers want a station of a different shape. Your first train takes them there.';
+    if (!myLines(g).length) return g.rivals ? `You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}. Your stations are tinted: get passengers out of them, and bring passengers in for points.` : g.coop ? `You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}; ${partnerLabel()} draws the rest. Drag between two stations to start.` : 'Passengers want a station of a different shape. Your first train takes them there.';
     if (!myTrains(g).length) return 'Your line has no train. The next locomotive arrives on Monday.';
     if (hasRivers(g) && tunnelsAvail(g) === 0 && availableColors(g).length === 0) return 'No tunnels left. Route around the river, or pick Tunnels on Monday.';
     return 'Drag between two stations to draw a line, or drag a ready letter onto a station.';
@@ -1726,8 +1809,9 @@
     }
     if (hasRivers(g)) {
       const n = tunnelsAvail(g), d = document.createElement('div');
-      d.className = 'budget' + (n ? '' : ' zero'); d.setAttribute('role', 'status'); d.setAttribute('aria-label', `Tunnels, ${n} of ${g.tunnelsTotal} left`);
-      d.innerHTML = `<span class="lbl">Tunnels</span><span class="sq">${Array.from({ length: g.tunnelsTotal }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span><b>${n}/${g.tunnelsTotal}</b>`;
+      const total = tunnelsTotalOf(g);
+      d.className = 'budget' + (n ? '' : ' zero'); d.setAttribute('role', 'status'); d.setAttribute('aria-label', `Tunnels, ${n} of ${total} left`);
+      d.innerHTML = `<span class="lbl">Tunnels</span><span class="sq">${Array.from({ length: total }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span><b>${n}/${total}</b>`;
       ui.tokens.appendChild(d);
     }
     const sel = lineById(g, g.selectedLine);
@@ -1738,7 +1822,7 @@
     const g = G; if (!g) return;
     ui.score.textContent = g.score;
     const modeTxt = g.daily ? 'Daily' : MODES[g.mode].name;
-    const tally = g.coop ? `${myLabel()} ${carriedBy(g, me)} · ${partnerLabel()} ${carriedBy(g, 1 - me)}` :`${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)}`;
+    const tally = g.rivals ? `${myLabel()} ${depot(g).score} · ${partnerLabel()} ${depot(g, 1 - me).score}` : g.coop ? `${myLabel()} ${carriedBy(g, me)} · ${partnerLabel()} ${carriedBy(g, 1 - me)}` : `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)}`;
     ui.scoreSub.textContent = isPhone() ? tally : `${tally} · ${CITIES[g.city].name} · ${modeTxt}`;
     const dayIdx = Math.floor(g.day) % 7, frac = g.day - Math.floor(g.day), paused = pausedNow(g), waiting = !paused && !!(net && net.waiting);
     ui.clock.classList.toggle('paused', paused);
@@ -1753,7 +1837,7 @@
     const showFrame = paused && g.started && !g.over;
     ui.pauseFrame.hidden = !showFrame; ui.pauseTab.hidden = !showFrame;
     canvas.classList.toggle('dim', showFrame);
-    const key = [JSON.stringify(g.depots), g.tunnelsTotal, g.tunnelsUsed, g.placing, g.selectedLine, g.lines.map((l) => l.color + (l.loop ? 'o' : '') + l.stations.length).join(',')].join('|');
+    const key = [g.depots.map((d) => [d.linesAvail, d.linesTotal, d.locosAvail, d.carriagesAvail, d.interchangesAvail, d.tunnelsTotal, d.tunnelsUsed].join('.')).join(';'), g.tunnelsTotal, g.tunnelsUsed, g.placing, g.selectedLine, g.lines.map((l) => l.color + (l.loop ? 'o' : '') + l.stations.length).join(',')].join('|');
     if (key !== hudKey) { hudKey = key; renderTray(g); }
     if (g.started) setCoach(coachFor(g));
   }
@@ -1764,7 +1848,7 @@
     const v = (n, d) => cs.getPropertyValue(n).trim() || d;
     const attr = document.documentElement.getAttribute('data-theme');
     const dark = attr === 'dark' || (attr !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    theme = { dark, ink: v('--ink', '#201e1d'), bg: v('--bg', '#f3f2f2'), muted: v('--muted', '#605d5d'), accent: v('--accent', '#ec3013'), riverBank: v('--river-bank', '#d6dde3'), river: v('--river', '#e3e9ee') };
+    theme = { dark, ink: v('--ink', '#201e1d'), bg: v('--bg', '#f3f2f2'), muted: v('--muted', '#605d5d'), accent: v('--accent', '#ec3013'), riverBank: v('--river-bank', '#d6dde3'), river: v('--river', '#e3e9ee'), own: [v('--own-a', '#dde8f9'), v('--own-b', '#f8e0ee')] };
     fontFamily = getComputedStyle(document.body).fontFamily || 'Archivo, system-ui, sans-serif';
   }
   const F = (w, s) => `${w} ${s}px ${fontFamily}`;
@@ -1959,7 +2043,8 @@
       }
       const leaving = g.leavers.find((lv) => lv.sid === st.id);
       if (leaving) { ctx.save(); ctx.globalAlpha = base * 0.5 * (1 - leaving.t / 0.7); ctx.strokeStyle = theme.ink; ctx.lineWidth = 2; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.arc(st.x, st.y, r + 13, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
-      ctx.fillStyle = theme.bg; ctx.strokeStyle = theme.ink; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+      // Rivals: an owned station is filled with its owner's tint
+      ctx.fillStyle = g.rivals && st.owner != null ? theme.own[st.owner] : theme.bg; ctx.strokeStyle = theme.ink; ctx.lineWidth = 3; ctx.lineJoin = 'round';
       shapePath(ctx, st.shape, st.x, st.y, r); ctx.fill(); ctx.stroke();
       if (st.interchange) { ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(st.x, st.y, 5, 0, Math.PI * 2); ctx.stroke(); }
       const x0 = st.x + r + 16 + 4.5, y0 = st.y - 5, faded = fadeStop === st.id;
@@ -1972,8 +2057,11 @@
       ctx.globalAlpha = base;
       if (st.passengers.length >= 8) {
         const R = CFG.stationR * (st.interchange ? 1.3 : 1) + 13, bx = st.x + R * Math.SQRT1_2, by = st.y - R * Math.SQRT1_2;
-        ctx.fillStyle = theme.accent; ctx.fillRect(bx - 9, by - 9, 18, 18);
-        ctx.fillStyle = '#ffffff'; ctx.font = F(800, 11); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(st.passengers.length), bx, by + 0.5);
+        if (g.rivals && st.owner !== me) textBox(ctx, `${partnerLabel()} · ${st.passengers.length}`, bx - 9, by, theme.accent, '#ffffff', F(800, 11), 5, 'left');
+        else {
+          ctx.fillStyle = theme.accent; ctx.fillRect(bx - 9, by - 9, 18, 18);
+          ctx.fillStyle = '#ffffff'; ctx.font = F(800, 11); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(st.passengers.length), bx, by + 0.5);
+        }
       }
       ctx.restore();
     };
@@ -1983,7 +2071,7 @@
     // floats
     for (const f of g.floats) {
       const dur = f.kind === 'giveup' ? 1.2 : 0.9, k = Math.min(1, f.t / dur), ease = 1 - (1 - k) * (1 - k);
-      ctx.save(); ctx.globalAlpha *= 1 - k; ctx.fillStyle = f.kind === 'giveup' ? theme.muted : theme.ink;
+      ctx.save(); ctx.globalAlpha *= 1 - k; ctx.fillStyle = f.kind === 'giveup' ? theme.muted : f.owner != null ? LC(f.owner === 0 ? 0 : 5) : theme.ink;
       ctx.font = F(800, 14); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(f.text, f.x, f.y - (reducedMotion() ? 0 : (f.kind === 'giveup' ? 40 : 24) * ease)); ctx.restore();
     }
@@ -2024,7 +2112,7 @@
     let pax = 0;
     for (const st of g.stations) pax += st.passengers.length;
     for (const tr of g.trains) pax += tr.passengers.length * 7;
-    return [Math.round(g.t * 1000), g.score, g.stations.length, g.lines.length, g.trains.length, pax, g.nextId, g.tunnelsUsed, g.week].join(',');
+    return [Math.round(g.t * 1000), g.score, g.stations.length, g.lines.length, g.trains.length, pax, g.nextId, g.tunnelsUsed, g.week, g.depots.map((d) => d.score).join('/')].join(',');
   }
   const netOpen = () => !!(net && net.ws && net.ws.readyState === WebSocket.OPEN && net.paired && !net.lost);
   function netSend(m) { if (net && net.ws && net.ws.readyState === WebSocket.OPEN) net.ws.send(JSON.stringify(m)); }
@@ -2067,17 +2155,17 @@
     else if (m.t === 'matched') {
       me = m.me === 1 ? 1 : 0; net.paired = true;
       netSend({ t: 'name', name: playerName });
-      if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: pick.city, seed }); beginCoop(pick.city, seed); }
-      else netUi.status.textContent = 'Partner found. Starting.';
+      if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: pick.city, seed, mode: pick.mode }); beginCoop(pick.city, seed, pick.mode); }
+      else netUi.status.textContent = `${pick.mode === 'rivals' ? 'Rival' : 'Partner'} found. Starting.`;
     }
-    else if (m.t === 'start' && me === 1 && CITIES[m.city]) beginCoop(m.city, m.seed | 0);
+    else if (m.t === 'start' && me === 1 && CITIES[m.city]) beginCoop(m.city, m.seed | 0, m.mode === 'rivals' ? 'rivals' : 'coop');
     else if (m.t === 'gone') onNetLost();
   }
-  function beginCoop(city, seed) {
+  function beginCoop(city, seed, mode = 'coop') {
     resetTurns(); netUi.ov.hidden = true;
-    launch(city, 'coop', seed, false);
+    launch(city, mode, seed, false);
     toast(`You are ${myLabel()} · you draw ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}`);
-    announce(`Co-op started. You are player ${me + 1} and draw lines ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}.`, false);
+    announce(`${MODES[mode].name} started. You are player ${me + 1} and draw lines ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}.`, false);
   }
   function onNetLost() {
     if (!net || net.lost) return;
@@ -2094,24 +2182,30 @@
   function connect(room) {
     closeNet();
     let ws;
-    try { ws = new WebSocket(`${RELAY_URL.replace(/\/$/, '')}/ws?room=${encodeURIComponent(room || 'public')}`); }
+    // the two online modes queue separately, so a co-op seeker is never paired with a rival
+    try { ws = new WebSocket(`${RELAY_URL.replace(/\/$/, '')}/ws?room=${encodeURIComponent(room || (pick.mode === 'rivals' ? 'public-rivals' : 'public'))}`); }
     catch (e) { netUi.status.textContent = 'The matchmaking server address is not valid.'; return; }
     net = { ws, room, paired: false, lost: false, lastSeen: performance.now(), hb: 0 }; resetTurns();
     ws.onmessage = onNetMessage;
     ws.onclose = () => { if (net && net.ws === ws) onNetLost(); };
     ws.onerror = () => { if (net && net.ws === ws) onNetLost(); };
-    // the relay forwards heartbeats too; a partner who goes quiet for LOST_AFTER_MS is treated as gone even if the socket lingers
+    // Heartbeats keep a waiting socket from being closed as idle; once paired the relay forwards them, and a partner
+    // who goes quiet for LOST_AFTER_MS is treated as gone even if the socket lingers.
     net.hb = setInterval(() => {
-      if (!net || net.ws !== ws || !net.paired) return;
+      if (!net || net.ws !== ws) return;
       netSend({ t: 'hb' });
-      if (performance.now() - net.lastSeen > LOST_AFTER_MS) onNetLost();
+      if (net.paired && performance.now() - net.lastSeen > LOST_AFTER_MS) onNetLost();
     }, HEARTBEAT_MS);
   }
-  const roomFromHash = () => { const m = /[#&]room=([a-z0-9-]{1,32})/i.exec(location.hash); return m ? m[1].toLowerCase() : null; };
-  const inviteLink = (room) => `${location.origin}${location.pathname}${location.search}#room=${room}`;
+  // An invite link names the room and, for Rivals, the mode, so the guest's card and queue match the host's.
+  const roomFromHash = () => { const m = /[#&]room=([a-z0-9-]{1,32})/i.exec(location.hash); return m ? { room: m[1].toLowerCase(), mode: /[#&]mode=rivals\b/i.test(location.hash) ? 'rivals' : 'coop' } : null; };
+  const inviteLink = (room) => `${location.origin}${location.pathname}${location.search}#room=${room}${pick.mode === 'rivals' ? '&mode=rivals' : ''}`;
   function openCoop(room) {
+    const rivals = pick.mode === 'rivals';
     ui.startOv.hidden = true; ui.overOv.hidden = true; netUi.ov.hidden = false;
-    netUi.title.textContent = room ? 'Waiting for your friend' : 'Finding a partner';
+    netUi.kicker.textContent = MODES[pick.mode].name;
+    netUi.title.textContent = room ? 'Waiting for your friend' : rivals ? 'Finding a rival' : 'Finding a partner';
+    netUi.text.textContent = rivals ? 'Two browsers, one city. Stations alternate owners; a delivery at your station is your point. Overflow at your station and you lose.' : 'Two browsers, one city. You each draw four lines; stations, tunnels and the game over are shared.';
     netUi.status.textContent = 'Connecting.';
     netUi.name.value = playerName;
     // a private room offers the same link again; the public queue offers a fresh one so a friend can skip the queue
@@ -2123,7 +2217,7 @@
   function playAgainCoop() {
     if (netOpen()) {
       // the relay pair is still live: the host just deals a new map
-      if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: G.city, seed }); beginCoop(G.city, seed); }
+      if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: G.city, seed, mode: G.mode }); beginCoop(G.city, seed, G.mode); }
       else { netUi.ov.hidden = false; netUi.title.textContent = 'Playing again'; netUi.status.textContent = 'Waiting for the host to deal a new map.'; netUi.invite.hidden = true; }
     } else openCoop(net && net.room ? net.room : null);
   }
@@ -2140,6 +2234,7 @@
     ['Crowding.', 'More than 6 waiting (12 at an interchange) starts a red ring. It closes in 40 seconds; when it does, the network shuts down. Anything red on the map needs you now.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3"><circle cx="22" cy="22" r="8"/><path d="M22 6 A16 16 0 0 1 38 22" stroke="var(--accent)" stroke-width="4"/><rect x="30" y="6" width="10" height="10" fill="var(--accent)" stroke="none"/></svg>'],
     ['Mondays.', 'Every Monday you receive a locomotive and choose one: a new line, a carriage, an interchange, or two tunnels. The map pauses while you decide.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="8" y="10" width="28" height="26"/><path d="M8 18 H36 M16 6 V12 M28 6 V12"/><rect x="14" y="23" width="6" height="6" fill="currentColor" stroke="none"/></svg>'],
     ['Co-op.', 'Find a partner online, or send a friend the link. The host draws lines A to D and the guest E to H on one shared city; stations, tunnels and the game over are shared. Both get a locomotive every Monday and take turns choosing the upgrade. Passengers change trains wherever your lines meet.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 32 L18 20 L30 20"/><path d="M38 12 L26 24 L14 24"/><circle cx="6" cy="32" r="4" fill="var(--bg)"/><circle cx="38" cy="12" r="4" fill="var(--bg)"/></svg>'],
+    ['Rivals.', 'Two players, one city, and every station belongs to one of you: stations alternate owners as they appear and carry a tint. A passenger delivered to your station is your point, whoever brought them. Lines, tunnels and Monday picks are your own. The first station to overflow ends the match, and its owner loses.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="13" cy="24" r="8" fill="var(--own-a)"/><rect x="24" y="12" width="15" height="15" fill="var(--own-b)"/><path d="M21 24 L24 24" stroke-width="3"/></svg>'],
   ];
   { const ul = $('rulesList'); for (const [lead, t, ic] of RULES) { const li = document.createElement('li'); li.innerHTML = `${ic}<span><b>${lead}</b> ${t}</span>`; ul.appendChild(li); } }
 
@@ -2188,8 +2283,8 @@
     } else {
       G = newGame(pick.city, pick.mode, (Math.random() * 1e9) | 0, false);
     }
-    const room = roomFromHash();
-    if (room) { pick.mode = 'coop'; renderStart(); openCoop(room); }
+    const invite = roomFromHash();
+    if (invite) { pick.mode = invite.mode; renderStart(); openCoop(invite.room); }
     requestAnimationFrame(frame);
   }
   if (window.claude && window.claude.hot && window.claude.hot.snapshot) {
