@@ -4,19 +4,30 @@ A browser transit puzzle in the spirit of Mini Metro. Stations keep appearing; y
 
 Single file, no build step, no dependencies. Open `index.html` in a browser, or serve the folder with any static server.
 
+## Cities and modes
+
+- **Riverside**: one river across the map, three tunnels to start.
+- **Twin Rivers**: two rivers, three banks, four tunnels to start.
+- **Dry Basin**: no water, but stations arrive faster and crowds run heavier.
+- **Normal**: a crowded station ends the run. **Endless**: no game over, overflowing passengers give up and leave, end the run yourself for the recap. **Extreme**: lines only grow (no retracting, removing, bypassing or opening loops).
+- **Today's daily**: the same seeded map for everyone, chosen from the date. Every other run is a fresh seed; the seed is shown in the recap so a map can be described.
+
 ## How to play
 
 - **Draw a line**: drag from one station to another, or drag a colour pill from the tray onto a station and on to a second one.
-- **Extend or retract**: drag a line's end cap to a new station; drag it back onto the previous stop to retract. Drag the cap onto the line's other end to close a loop; long-press or right-click a loop segment to open it again.
+- **Extend or retract**: drag a line's end cap to a new station; drag it back onto the previous stop to retract. Drag the cap onto the line's other end to close a loop. Loop trains run one way, never reverse, and go 25% faster. Long-press or right-click a loop segment to open it.
+- **Reroute**: drag a segment onto a station to add a stop in the middle. Select a line from the tray, then drag a middle stop off the line to bypass it.
 - **Manage lines**: tap a drawn pill in the tray to select its line, then **Remove** to return its train to the depot.
-- **Passengers** board any train that brings them closer to a station of their shape and change lines where lines meet.
-- **Crowding**: more than 6 waiting passengers (12 at an interchange) starts a red ring. When the ring closes, the game ends.
-- **Every Monday** you receive a locomotive and choose one upgrade: a new line, a carriage (+6 seats), or an interchange. Place them from the depot tray, or keep them for later.
-- Keys: `Space` pause, `1` / `2` speed, `Esc` cancel placement.
+- **Rivers**: every crossing uses a tunnel. Retracting a crossing gives it back. The tray shows how many remain.
+- **Passengers** board only trains heading toward a station that brings them closer, and change lines where lines meet. Rare shapes draw demand from the whole map. A hollow passenger glyph has no route yet.
+- **Crowding**: more than 6 waiting passengers (12 at an interchange) starts a red ring, with a ripple the moment it begins. When the ring closes, the game ends. Interchanges also halve stopping time.
+- **Every Monday** you receive a locomotive and choose one upgrade: a new line, a carriage (+6 seats, tap the train you want it on), an interchange, or two tunnels. A new locomotive joins its line where the gap between trains is widest.
+- **Recap**: the end card shows the top line, the busiest station, the longest and average wait, and your best for that city and mode.
+- Keys: `Space` pause, `1` / `2` speed, `Esc` cancel placement. Sound can be muted from the top bar.
 
 ## Notes
 
 - Shared segments are drawn side by side; trains follow the offset path.
-- Best score is kept in `localStorage` (per browser).
+- Best scores and the mute setting are kept in `localStorage` (per browser).
 - Light and dark themes follow the system setting.
 - Design review canvas with the UI decisions: https://claude.ai/artifact/W1TgbFAqW6MGrWWD56BJ4G
