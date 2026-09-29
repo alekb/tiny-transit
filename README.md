@@ -1,6 +1,10 @@
 # Tiny Transit
 
-A browser transit puzzle in the spirit of Mini Metro. Stations keep appearing; you draw lines between them and keep the passengers moving. When a station stays crowded for too long, the network shuts down.
+A browser transit puzzle in the spirit of Mini Metro.
+
+**Play it:** https://alekb.github.io/tiny-transit/
+
+Stations keep appearing; you draw lines between them and keep the passengers moving. When a station stays crowded for too long, the network shuts down.
 
 Single file, no build step, no dependencies. Open `index.html` in a browser, or serve the folder with any static server.
 
@@ -30,4 +34,3 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 - Shared segments are drawn side by side; trains follow the offset path.
 - Best scores and the mute setting are kept in `localStorage` (per browser).
 - Light and dark themes follow the system setting.
-- Design review canvas with the UI decisions: https://claude.ai/artifact/W1TgbFAqW6MGrWWD56BJ4G
