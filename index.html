@@ -7,187 +7,303 @@
 <meta name="description" content="A browser transit puzzle: draw lines between stations and keep passengers moving.">
 <title>Tiny Transit</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap">
 <style>
-  /* Layout: one full-screen canvas; a quiet top bar (score left, clock + controls right);
-     a bottom depot tray (line pills, then locomotive / carriage / interchange / tunnel tokens);
-     a coach strip and the placement banner sit just above the tray; modal cards centred. */
+  /* Modernist system: Archivo, zero radius, 2px ink rules, one accent that is also the warning colour.
+     Layout: full-screen canvas map; top bar (score left, clock + controls right); bottom tray with
+     coach / lines / depot cells; toasts and the placement banner stack above the tray; cards over the map. */
   :root {
-    --bg: #f4f3ee;
-    --ink: #1f1e1b;
-    --muted: #6f6c64;
-    --panel: rgba(255, 255, 255, 0.88);
-    --panel-solid: #ffffff;
-    --panel-border: rgba(31, 30, 27, 0.14);
-    --warn: #d9412b;
-    --good: #2a9d4b;
-    --accent: #1c6bd1;
-    --river: #cfdfe9;
-    --river2: #e2edf3;
-    --shadow: rgba(31, 30, 27, 0.10);
-    --font: 'Outfit', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+    --bg: #f3f2f2; --surface: #eae9e9; --ink: #201e1d; --muted: #605d5d;
+    --divider: rgba(32, 30, 29, 0.4); --hairline: rgba(32, 30, 29, 0.2); --panel: rgba(243, 242, 242, 0.94);
+    --accent: #ec3013; --accent-deep: #ae1800; --on-accent: #ffffff;
+    --river-bank: #d6dde3; --river: #e3e9ee; --grid: rgba(32, 30, 29, 0.06);
+    --shadow: 0 12px 32px rgba(45, 43, 43, 0.22);
+    --line-a: #0a5fd6; --line-b: #d98a00; --line-c: #1e8f5a; --line-d: #6d3fc4; --line-e: #0e93b5; --line-f: #c22e86; --line-g: #8a5a25; --line-h: #4a6a86;
+    --on-line: #ffffff;
+    --font: 'Archivo', system-ui, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #17181b; --ink: #f1efe8; --muted: #9a978f;
-      --panel: rgba(34, 35, 40, 0.90); --panel-solid: #24252a; --panel-border: rgba(241, 239, 232, 0.16);
-      --warn: #ff6a52; --good: #4cc36f; --accent: #5b9bff; --river: #232f3a; --river2: #29384a; --shadow: rgba(0, 0, 0, 0.35); color-scheme: dark;
+      --bg: #1a1918; --surface: #262423; --ink: #f1efe8; --muted: #9b9797;
+      --divider: rgba(241, 239, 232, 0.4); --hairline: rgba(241, 239, 232, 0.2); --panel: rgba(26, 25, 24, 0.94);
+      --accent: #ff6a52; --accent-deep: #ffb3a3; --on-accent: #1a1918;
+      --river-bank: #262c33; --river: #2c343d; --grid: rgba(241, 239, 232, 0.06);
+      --shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+      --line-a: #6aa6ff; --line-b: #ffb020; --line-c: #3ecf8a; --line-d: #a98cff; --line-e: #3fd0f0; --line-f: #ff6fc2; --line-g: #d29a5c; --line-h: #9bb6cc;
+      --on-line: #1a1918; color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #17181b; --ink: #f1efe8; --muted: #9a978f;
-    --panel: rgba(34, 35, 40, 0.90); --panel-solid: #24252a; --panel-border: rgba(241, 239, 232, 0.16);
-    --warn: #ff6a52; --good: #4cc36f; --accent: #5b9bff; --river: #232f3a; --river2: #29384a; --shadow: rgba(0, 0, 0, 0.35); color-scheme: dark;
+    --bg: #1a1918; --surface: #262423; --ink: #f1efe8; --muted: #9b9797;
+    --divider: rgba(241, 239, 232, 0.4); --hairline: rgba(241, 239, 232, 0.2); --panel: rgba(26, 25, 24, 0.94);
+    --accent: #ff6a52; --accent-deep: #ffb3a3; --on-accent: #1a1918;
+    --river-bank: #262c33; --river: #2c343d; --grid: rgba(241, 239, 232, 0.06);
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    --line-a: #6aa6ff; --line-b: #ffb020; --line-c: #3ecf8a; --line-d: #a98cff; --line-e: #3fd0f0; --line-f: #ff6fc2; --line-g: #d29a5c; --line-h: #9bb6cc;
+    --on-line: #1a1918; color-scheme: dark;
   }
   [hidden] { display: none !important; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); overflow: hidden; }
-  button { font-family: var(--font); }
+  button { font-family: var(--font); color: inherit; }
+  button:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #app { position: fixed; inset: 0; }
-  canvas { display: block; touch-action: none; cursor: crosshair; }
+  canvas { display: block; touch-action: none; cursor: crosshair; transition: opacity 200ms; }
+  canvas.dim { opacity: 0.8; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
 
-  #hud {
-    position: fixed; top: 0; left: 0; right: 0;
-    padding: calc(env(safe-area-inset-top, 0px) + 14px) 20px 8px;
-    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; pointer-events: none;
-  }
+  /* pause frame */
+  #pauseFrame { position: fixed; inset: 0; border: 3px solid var(--ink); pointer-events: none; box-sizing: border-box; z-index: 5; }
+  #pauseTab { position: fixed; top: env(safe-area-inset-top, 0px); left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); font: 600 11px var(--font); letter-spacing: 0.1em; text-transform: uppercase; padding: 5px 12px; pointer-events: none; z-index: 5; }
+
+  /* top bar */
+  #hud { position: fixed; top: 0; left: 0; right: 0; padding: calc(env(safe-area-inset-top, 0px) + 18px) 24px 8px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; pointer-events: none; }
   #hud > * { pointer-events: auto; }
-  .hud-left { display: flex; flex-direction: column; gap: 2px; }
+  .hud-left { display: flex; flex-direction: column; gap: 4px; }
   .scoreRow { display: flex; align-items: baseline; gap: 10px; }
-  .score { font-size: 40px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
-  .lbl { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+  .score { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.02em; }
   .sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .hud-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+  .hud-right { display: flex; align-items: center; gap: 12px; }
   .clockWrap { display: flex; align-items: center; gap: 10px; }
-  .clock { width: 44px; height: 44px; border-radius: 50%; border: 2.5px solid var(--ink); background: conic-gradient(var(--ink) 0deg, transparent 0deg); box-sizing: border-box; flex-shrink: 0; }
-  .daytxt { display: flex; flex-direction: column; line-height: 1.1; }
-  .daytxt .d { font-weight: 600; font-size: 17px; }
-  .daytxt .w { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); white-space: nowrap; }
-  .seg { display: flex; border: 1px solid var(--panel-border); border-radius: 10px; overflow: hidden; background: var(--panel); }
-  .seg button { border: 0; background: transparent; color: var(--ink); font: 500 14px var(--font); height: 40px; padding: 0 12px; cursor: pointer; }
-  .seg button + button { border-left: 1px solid var(--panel-border); }
-  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); font-weight: 600; }
-  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .btn { border: 1px solid var(--panel-border); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 0 12px; height: 40px; font: 500 14px var(--font); cursor: pointer; }
-  .btn.icon { width: 40px; padding: 0; font-weight: 600; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; }
-  .btn:hover, .btn:focus-visible { border-color: var(--ink); outline: none; }
-  .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); height: 46px; padding: 0 22px; font-size: 15px; font-weight: 600; border-radius: 12px; }
-  .btn.primary:hover { opacity: 0.9; }
-  .btn.quiet { height: 46px; padding: 0 18px; border-radius: 12px; font-size: 15px; background: var(--panel-solid); }
+  .clock { position: relative; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--ink); background: conic-gradient(var(--ink) 0deg, transparent 0deg); box-sizing: border-box; flex-shrink: 0; }
+  .clock.paused { background: none; }
+  .clock.paused::before, .clock.paused::after { content: ""; position: absolute; top: 10px; width: 4px; height: 16px; background: var(--ink); }
+  .clock.paused::before { left: 12px; } .clock.paused::after { right: 12px; }
+  .daytxt { display: flex; flex-direction: column; line-height: 1.15; }
+  .daytxt .d { font-weight: 800; font-size: 17px; }
+  .daytxt .w { white-space: nowrap; }
+  .daytxt .w.paused { color: var(--accent); }
+  .seg { display: flex; border: 2px solid var(--divider); background: var(--panel); height: 40px; box-sizing: border-box; }
+  .seg button { border: 0; background: transparent; font: 600 14px var(--font); padding: 0 14px; cursor: pointer; height: 100%; }
+  .seg button + button { border-left: 1px solid var(--hairline); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); font-weight: 800; }
+  .seg button.pausedCell { background: var(--accent); color: var(--on-accent); font-weight: 800; }
+  .seg button:focus-visible { outline-offset: -2px; }
+  .btn { border: 2px solid var(--divider); background: var(--panel); color: var(--ink); height: 40px; padding: 0 14px; font: 800 14px var(--font); cursor: pointer; text-align: left; box-sizing: border-box; }
+  .btn.icon { width: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+  .btn:hover { background: var(--surface); }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); height: 48px; padding: 0 20px; font-size: 15px; min-width: 180px; }
+  .btn.primary:hover { background: var(--accent-deep); border-color: var(--accent-deep); }
+  .btn.primary:disabled { opacity: 0.45; cursor: default; }
+  .btn.primary:disabled:hover { background: var(--accent); border-color: var(--accent); }
+  .btn.secondary { background: var(--bg); height: 44px; font-size: 15px; }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--accent); height: 44px; font-size: 15px; padding: 0 8px; }
+  .btn.ghost:hover { background: var(--surface); }
+  #menuBtn { display: none; width: 44px; height: 44px; }
+  #menuBtn[aria-expanded="true"] { background: var(--ink); color: var(--bg); }
+  #menu { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 70px); right: 16px; width: 220px; background: var(--bg); border: 2px solid var(--ink); box-shadow: var(--shadow); z-index: 8; display: flex; flex-direction: column; }
+  #menu .mrow { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 14px; border-top: 1px solid var(--hairline); font: 600 14px var(--font); background: transparent; border-left: 0; border-right: 0; border-bottom: 0; width: 100%; box-sizing: border-box; cursor: pointer; text-align: left; }
+  #menu .mrow:first-child { border-top: 0; }
+  #menu .mrow .hint { font: 400 12px var(--font); color: var(--muted); }
+  #menu .mseg { display: flex; border: 2px solid var(--divider); height: 30px; }
+  #menu .mseg button { border: 0; background: transparent; font: 600 12px var(--font); padding: 0 10px; cursor: pointer; }
+  #menu .mseg button + button { border-left: 1px solid var(--hairline); }
+  #menu .mseg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+  #menu .mhead { padding: 10px 14px; border-bottom: 2px solid var(--divider); }
 
-  #bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 16px); display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  /* bottom stack */
+  #bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 0 24px calc(env(safe-area-inset-bottom, 0px) + 20px); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
   #bottom > * { pointer-events: auto; }
-  #coach { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); background: color-mix(in srgb, var(--bg) 80%, transparent); padding: 4px 10px; border-radius: 8px; text-align: center; max-width: 100%; }
-  #coach button { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--panel-border); background: var(--panel-solid); color: var(--ink); font: 500 13px var(--font); cursor: pointer; white-space: nowrap; }
-  #coach button:hover { border-color: var(--ink); }
-  #banner { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; background: var(--ink); color: var(--bg); border-radius: 14px; box-shadow: 0 10px 30px var(--shadow); font-size: 14px; font-weight: 500; max-width: 100%; box-sizing: border-box; flex-wrap: wrap; justify-content: center; }
+  .trayw { width: min(920px, 100%); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  #toasts { display: flex; flex-direction: column-reverse; gap: 6px; align-items: flex-start; pointer-events: none; min-height: 0; }
+  .toast { display: inline-flex; align-items: center; gap: 8px; background: var(--ink); color: var(--bg); font: 600 14px var(--font); padding: 10px 14px; pointer-events: none; }
+  .toast .chip { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font: 800 11px var(--font); color: var(--on-line); }
+  .toast.out { opacity: 0; transition: opacity 200ms; }
+  #refusal { position: fixed; z-index: 9; background: var(--accent); color: var(--on-accent); font: 600 13px var(--font); padding: 8px 12px; pointer-events: none; max-width: 280px; }
+  #refusal small { display: block; font: 400 12px var(--font); opacity: 0.9; margin-top: 2px; }
+  #banner { width: 100%; height: 52px; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 0 8px 0 14px; background: var(--ink); color: var(--bg); font: 600 15px var(--font); }
   #banner svg { flex-shrink: 0; }
-  #banner button { height: 34px; padding: 0 12px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); background: transparent; color: var(--bg); font: 500 13px var(--font); cursor: pointer; }
-  #banner button:hover { background: color-mix(in srgb, var(--bg) 14%, transparent); }
-  #tray { display: flex; align-items: center; gap: 14px; padding: 10px 14px; max-width: 100%; box-sizing: border-box; background: var(--panel); border: 1px solid var(--panel-border); border-radius: 18px; box-shadow: 0 6px 24px var(--shadow); backdrop-filter: blur(8px); }
-  .group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .glbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
-  .vdiv { width: 1px; align-self: stretch; background: var(--panel-border); }
-  .pills { display: flex; align-items: center; gap: 8px; height: 44px; }
-  .pill { width: 30px; height: 30px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; touch-action: none; }
-  .pill.drawn i { width: 8px; height: 8px; border-radius: 50%; background: #ffffff; display: block; }
-  .pill.drawn.selected { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--ink); }
-  .pill.avail { border: 3px dashed var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); cursor: grab; }
-  .pill.avail.next { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 22%, transparent); }
-  .pill.locked { width: 18px; height: 18px; background: color-mix(in srgb, var(--ink) 9%, transparent); cursor: default; margin: 0 4px; }
-  .pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .tokens { display: flex; align-items: center; gap: 10px; height: 44px; }
-  .token { position: relative; width: 48px; height: 44px; border-radius: 12px; border: 1px solid var(--panel-border); background: var(--panel-solid); color: var(--ink); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: transform 120ms ease, box-shadow 120ms ease; }
-  .token:disabled { border-style: dashed; background: transparent; opacity: 0.5; cursor: default; }
-  .token:not(:disabled):hover { border-color: var(--ink); }
-  .token.active { transform: translateY(-6px); border: 2px solid var(--ink); box-shadow: 0 10px 20px var(--shadow); }
-  .token.passive { cursor: default; }
-  .token .n { position: absolute; top: -7px; right: -7px; min-width: 20px; height: 20px; border-radius: 10px; padding: 0 5px; box-sizing: border-box; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  #banner .esc { font: 400 12px var(--font); opacity: 0.7; margin-left: auto; white-space: nowrap; }
+  #banner button { height: 34px; padding: 0 12px; border: 2px solid color-mix(in srgb, var(--bg) 50%, transparent); background: transparent; color: var(--bg); font: 600 13px var(--font); cursor: pointer; white-space: nowrap; }
+  #tray { width: 100%; height: 84px; box-sizing: border-box; display: flex; align-items: stretch; background: var(--panel); border: 2px solid var(--divider); }
+  .cell { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; min-width: 0; box-sizing: border-box; }
+  .cell + .cell { border-left: 2px solid var(--divider); }
+  .cell.coach { flex: 1 1 0; min-width: 120px; justify-content: center; }
+  .cell:not(.coach) { flex: 0 0 auto; }
+  #coachText { font: 400 14px/1.3 var(--font); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; transition: opacity 150ms; }
+  #coachText.fade { opacity: 0; }
+  .pills { display: flex; align-items: center; gap: 6px; }
+  .pill { width: 36px; height: 36px; border: 0; padding: 0; margin: 4px 0; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; box-sizing: border-box; touch-action: none; position: relative; font: 800 14px var(--font); background: transparent; }
+  .pill.drawn { background: var(--c); color: var(--on-line); }
+  .pill.drawn.selected { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .pill.drawn .loopmark { position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; }
+  .pill.avail { border: 2px dashed var(--c); color: var(--c); cursor: grab; }
+  .pill.avail:hover { border-style: solid; background: color-mix(in srgb, var(--c) 10%, transparent); }
+  .pill.locked { border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent); color: color-mix(in srgb, var(--ink) 35%, transparent); font: 600 12px var(--font); cursor: default; }
+  .tokens { display: flex; align-items: center; gap: 8px; }
+  .token { position: relative; flex-shrink: 0; width: 44px; height: 36px; border: 2px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; box-sizing: border-box; margin: 4px 0; }
+  .token:hover { background: var(--surface); }
+  .token.empty { border: 1px dotted color-mix(in srgb, var(--ink) 35%, transparent); opacity: 0.5; cursor: default; }
+  .token.empty:hover { background: transparent; }
+  .token.active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .token .n { position: absolute; top: -8px; right: -6px; width: 16px; height: 16px; background: var(--ink); color: var(--bg); font: 800 10px var(--font); display: flex; align-items: center; justify-content: center; }
   .token svg { display: block; }
-  @media (prefers-reduced-motion: reduce) { .token { transition: none; } }
+  .budget { display: flex; flex-direction: column; gap: 3px; padding-left: 12px; margin-left: 4px; border-left: 1px solid var(--hairline); justify-content: center; }
+  .budget .lbl { font-size: 10px; }
+  .budget .sq { display: flex; gap: 3px; align-items: center; }
+  .budget .sq i { width: 10px; height: 10px; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, var(--ink) 40%, transparent); }
+  .budget .sq i.on { background: var(--ink); border-color: var(--ink); }
+  .budget b { font: 600 13px var(--font); font-variant-numeric: tabular-nums; }
+  .budget.zero b, .budget.zero .lbl { color: var(--accent); }
+  .budget.zero .sq i { border-color: var(--accent); }
+  #btnRemoveLine { height: 40px; }
 
-  .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--bg) 62%, transparent); padding: 16px; box-sizing: border-box; overflow: auto; }
-  .card { background: var(--panel-solid); border: 1px solid var(--panel-border); border-radius: 20px; padding: 28px; width: min(100%, 560px); box-sizing: border-box; box-shadow: 0 16px 48px var(--shadow); display: flex; flex-direction: column; gap: 20px; }
-  .card h1, .card h2 { margin: 0; text-wrap: balance; }
-  .card h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.01em; }
-  .card h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; }
-  .card p { margin: 0; line-height: 1.5; font-size: 15px; }
+  /* full-page grounds: start, help */
+  .page { position: fixed; inset: 0; overflow: auto; background: var(--bg); background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 80px 80px; z-index: 6; padding: calc(env(safe-area-inset-top, 0px) + 56px) 80px 56px; box-sizing: border-box; }
+  .kicker { font: 600 11px var(--font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+  .start { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; max-width: 1120px; margin: 0 auto; }
+  .start h1 { font: 800 64px/1 var(--font); letter-spacing: -0.025em; margin: 12px 0 20px; text-wrap: balance; }
+  .start .pitch { font: 400 17px/1.5 var(--font); max-width: 480px; margin: 0 0 24px; }
+  .rule { height: 2px; background: var(--divider); }
+  .cells2 { display: grid; grid-template-columns: 1fr 1fr; }
+  .cellinfo { padding: 14px 16px 14px 0; display: flex; flex-direction: column; gap: 4px; border-bottom: 2px solid var(--divider); }
+  .cellinfo + .cellinfo { border-left: 1px solid var(--hairline); padding-left: 16px; }
+  .cellinfo b { font: 800 17px var(--font); }
+  .cellinfo span { font: 400 12px/1.4 var(--font); color: var(--muted); }
+  .startBtns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 24px; }
+  .pick { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+  .pick .rule { margin-top: 2px; }
+  .optgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 2px solid var(--divider); }
+  .opt { border: 0; background: transparent; color: var(--ink); padding: 12px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; min-width: 0; box-sizing: border-box; }
+  .opt + .opt { border-left: 1px solid var(--hairline); }
+  .opt[aria-pressed="true"] { background: var(--surface); outline: 2px solid var(--ink); outline-offset: -2px; }
+  .opt:hover { background: var(--surface); }
+  .opt svg { width: 100%; height: auto; display: block; }
+  .opt strong { font: 800 15px var(--font); }
+  .opt span { font: 400 12px/1.35 var(--font); color: var(--muted); }
+  .swrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .sw { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font: 800 13px var(--font); color: var(--on-line); }
+  .caption { font: 400 12px/1.4 var(--font); color: var(--muted); margin: 8px 0 0; }
+  .foot { font: 400 12px var(--font); color: var(--muted); margin-top: 24px; }
+  .phoneOnly { display: none; }
+
+  /* help page */
+  .help { max-width: 960px; margin: 0 auto; }
+  .helphead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 2px solid var(--divider); margin-bottom: 8px; }
+  .helphead h1 { font: 800 40px/1.05 var(--font); letter-spacing: -0.02em; margin: 8px 0 0; }
+  .rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; margin: 0; padding: 0; list-style: none; }
+  .rules li { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: start; font: 400 14px/1.5 var(--font); padding: 16px 0; border-bottom: 1px solid var(--hairline); }
+  .rules li b { font-weight: 800; }
+  .rules svg { width: 44px; height: 44px; }
+  .shortcuts { font: 400 13px var(--font); color: var(--muted); margin-top: 20px; }
+
+  /* cards */
+  .overlay { position: fixed; inset: 0; z-index: 7; padding: 16px; box-sizing: border-box; overflow: auto; display: flex; align-items: flex-start; justify-content: center; pointer-events: none; }
+  .overlay.center { align-items: center; }
+  .overlay.center::before { content: ""; position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 50%, transparent); }
+  .card { position: relative; background: var(--bg); border: 2px solid var(--ink); box-shadow: var(--shadow); padding: 28px 32px; width: min(100%, 600px); box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; pointer-events: auto; }
+  .card h2 { font: 800 32px/1.1 var(--font); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+  .card p { margin: 0; font: 400 15px/1.5 var(--font); }
   .card .muted { color: var(--muted); font-size: 14px; }
-  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
-  .eyebrow.warn { color: var(--warn); font-weight: 600; }
   .stack { display: flex; flex-direction: column; gap: 8px; }
-  .pick { display: flex; flex-direction: column; gap: 8px; }
-  .pickrow { display: flex; gap: 8px; flex-wrap: wrap; }
-  .opt { border: 1px solid var(--panel-border); background: var(--panel-solid); color: var(--ink); border-radius: 12px; padding: 10px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; min-width: 0; flex: 1 1 140px; }
-  .opt strong { font-size: 15px; font-weight: 600; }
-  .opt span { font-size: 12px; color: var(--muted); line-height: 1.35; }
-  .opt[aria-pressed="true"] { border: 2px solid var(--ink); padding: 9px 13px; }
-  .opt:hover, .opt:focus-visible { border-color: var(--ink); outline: none; }
-  .rules { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-  .rules li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; font-size: 14px; line-height: 1.45; }
-  .rules svg { width: 24px; height: 24px; }
-  .always { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--bg); border-radius: 14px; }
-  .always .tile { width: 52px; height: 48px; border-radius: 12px; background: var(--panel-solid); border: 1px solid var(--panel-border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .always { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--surface); }
+  .always .tile { width: 52px; height: 48px; border: 2px solid var(--ink); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .always .txt { display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0; }
-  .always b { font-size: 16px; font-weight: 600; }
-  .always span { font-size: 13px; color: var(--muted); }
-  .tag { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); padding: 4px 8px; border-radius: 6px; white-space: nowrap; }
-  .choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  @media (max-width: 460px) { .choices { grid-template-columns: 1fr; } }
-  .choice { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; text-align: left; padding: 16px; border-radius: 14px; border: 1px solid var(--panel-border); background: var(--panel-solid); color: var(--ink); cursor: pointer; }
-  .choice:hover, .choice:focus-visible { border: 2px solid var(--ink); padding: 15px; outline: none; }
-  .choice .ic { width: 44px; height: 44px; border-radius: 12px; background: color-mix(in srgb, var(--ink) 6%, transparent); display: flex; align-items: center; justify-content: center; }
-  .choice strong { font-size: 17px; font-weight: 600; }
-  .choice span { font-size: 13px; color: var(--muted); line-height: 1.4; }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-  @media (max-width: 460px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .stat { display: flex; flex-direction: column; gap: 2px; }
-  .stat b { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .always b { font: 800 16px var(--font); }
+  .always span { font: 400 13px var(--font); color: var(--muted); }
+  .tag { font: 600 11px var(--font); letter-spacing: 0.08em; text-transform: uppercase; background: var(--bg); color: var(--muted); padding: 4px 8px; white-space: nowrap; border: 1px solid var(--hairline); }
+  .choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 2px solid var(--divider); border-bottom: 2px solid var(--divider); }
+  .choice { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; text-align: left; padding: 16px 14px; border: 0; background: transparent; color: var(--ink); cursor: pointer; min-width: 0; }
+  .choice + .choice { border-left: 1px solid var(--hairline); }
+  .choice[aria-pressed="true"] { background: var(--surface); outline: 2px solid var(--ink); outline-offset: -2px; }
+  .choice:hover { background: var(--surface); }
+  .choice .ic { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; }
+  .choice .ic.sw { font-size: 16px; }
+  .choice strong { font: 800 17px var(--font); }
+  .choice span { font: 400 13px/1.4 var(--font); color: var(--muted); }
+  .cardfoot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .cardfoot .btn.primary { height: 44px; min-width: 160px; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 2px solid var(--divider); border-bottom: 2px solid var(--divider); }
+  .stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 10px 12px 0; }
+  .stat + .stat { border-left: 1px solid var(--hairline); padding-left: 12px; }
+  .stat b { font: 800 32px/1.1 var(--font); font-variant-numeric: tabular-nums; }
   .stat b.dim { color: var(--muted); }
-  .stat span { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-  .recap { display: grid; gap: 6px; margin: 0; padding: 12px 14px; background: var(--bg); border-radius: 12px; list-style: none; font-size: 13px; }
-  .recap li { display: flex; justify-content: space-between; gap: 12px; }
+  .stat span { font: 600 10px var(--font); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .recap { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; font: 400 13px var(--font); }
+  .recap li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
   .recap li span:last-child { font-weight: 600; text-align: right; }
-  .tip { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: var(--bg); border-radius: 12px; font-size: 13px; line-height: 1.45; }
+  .tip { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: var(--surface); font: 400 13px/1.45 var(--font); }
   .tip svg { flex-shrink: 0; margin-top: 1px; }
-  .swatches { display: flex; gap: 6px; }
-  .swatches i { width: 22px; height: 8px; border-radius: 4px; display: inline-block; }
+  .btncol { display: flex; flex-direction: column; gap: 8px; }
+  .btnrow { display: flex; gap: 8px; }
+  .btnrow .btn { flex: 1 1 0; }
+  #overOv .card { width: 500px; }
+  #overOv.side { align-items: stretch; justify-content: flex-start; padding: 64px 24px; }
+  #overOv.side.right { justify-content: flex-end; }
+  #overOv.side .card { overflow: auto; }
   @media (prefers-reduced-motion: no-preference) {
-    .card { animation: pop 220ms ease-out; }
-    @keyframes pop { from { transform: scale(0.97); opacity: 0.6; } to { transform: none; opacity: 1; } }
+    .card { animation: cardin 150ms ease-out; }
+    @keyframes cardin { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+    #menu { animation: menuin 120ms ease-out; }
+    @keyframes menuin { from { transform: translateY(-4px); opacity: 0; } to { transform: none; opacity: 1; } }
+    #refusal.shake { animation: shake 120ms; }
+    @keyframes shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
   }
+  @media (prefers-reduced-motion: reduce) { canvas, #coachText, .toast.out { transition: none; } }
 
-  @media (max-width: 600px) {
-    #hud { padding-left: 14px; padding-right: 14px; }
+  @media (max-width: 720px) {
+    #hud { padding-left: 16px; padding-right: 16px; align-items: center; }
     .score { font-size: 32px; }
+    .sub { font-size: 12px; }
     .clock { width: 36px; height: 36px; }
+    .clock.paused::before, .clock.paused::after { top: 8px; }
+    .clock.paused::before { left: 10px; } .clock.paused::after { right: 10px; }
     .daytxt .d { font-size: 15px; }
+    .daytxt .w { font-size: 10px; }
     .hud-right { gap: 8px; }
-    .seg button { padding: 0 10px; font-size: 13px; }
-    #tray { flex-direction: column; align-items: stretch; gap: 10px; width: 100%; padding: 10px 12px; }
-    .vdiv { width: auto; height: 1px; }
-    .group { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
-    .pills, .tokens { height: auto; }
-    .pill { width: 32px; height: 32px; }
-    .pill.locked { width: 14px; height: 14px; margin: 0 2px; }
-    .card { padding: 22px; }
+    .seg, #btnEnd, #btnSound, #btnHelp { display: none; }
+    #menuBtn { display: inline-flex; }
+    #bottom { padding-left: 12px; padding-right: 12px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
+    #tray { height: auto; flex-direction: column; }
+    .cell + .cell { border-left: 0; border-top: 2px solid var(--divider); }
+    .cell { flex-direction: row; align-items: center; gap: 12px; padding: 8px 12px; }
+    .cell.coach { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .cell .lbl { width: 44px; flex-shrink: 0; font-size: 10px; }
+    .pills { overflow-x: auto; scrollbar-width: none; flex: 1; }
+    .token { width: 48px; height: 44px; }
+    .budget { margin-left: auto; align-items: flex-end; border-left: 0; padding-left: 0; }
+    #banner { height: auto; min-height: 48px; padding: 8px 8px 8px 12px; font-size: 14px; flex-wrap: wrap; }
+    #banner .esc { display: none; }
+    .page { padding: calc(env(safe-area-inset-top, 0px) + 56px) 20px 40px; }
+    .start { grid-template-columns: 1fr; gap: 32px; }
+    .start h1 { font-size: 44px; }
+    .start .pitch { font-size: 15px; }
+    .cells2, .startBtns .btn.ghost, .foot { display: none; }
+    .phoneOnly { display: flex; }
+    .btn.primary { width: 100%; height: 52px; }
+    .startBtns { flex-direction: column; align-items: stretch; }
+    .helphead h1 { font-size: 28px; }
+    .rules { grid-template-columns: 1fr; }
+    .card { padding: 20px; }
+    .card h2 { font-size: 24px; }
+    .stat b { font-size: 26px; }
+    .choices { grid-template-columns: 1fr; }
+    .choice + .choice { border-left: 0; border-top: 1px solid var(--hairline); }
+    #overOv .card { width: 100%; }
+    #overOv.sheet { align-items: flex-end; padding: 0; }
+    #overOv.sheet .card { border-left: 0; border-right: 0; border-bottom: 0; border-top-width: 3px; box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.25); max-height: 54%; overflow: auto; }
+    @media (prefers-reduced-motion: no-preference) { #overOv.sheet .card { animation: sheetin 220ms cubic-bezier(.2,.7,.2,1); } @keyframes sheetin { from { transform: translateY(100%); } to { transform: none; } } }
   }
 </style>
 </head>
 <body>
 <div id="app">
   <canvas id="c" aria-label="Transit map"></canvas>
+  <div id="pauseFrame" hidden></div>
+  <div id="pauseTab" hidden>Paused</div>
+  <div class="sr" id="srPolite" aria-live="polite"></div>
+  <div class="sr" id="srAssertive" aria-live="assertive"></div>
 
   <header id="hud">
     <div class="hud-left">
-      <div class="scoreRow"><span class="score" id="score">0</span><span class="lbl">carried</span></div>
-      <div class="sub" id="scoreSub">0 today · best 0</div>
+      <div class="scoreRow"><span class="score" id="score">0</span><span class="lbl">Carried</span></div>
+      <div class="sub" id="scoreSub"></div>
     </div>
     <div class="hud-right">
-      <div class="clockWrap">
+      <div class="clockWrap" id="clockWrap" role="img" aria-label="Clock">
         <div class="clock" id="clock" aria-hidden="true"></div>
-        <div class="daytxt"><span class="d" id="dayname">Monday</span><span class="w" id="weektxt">Week 1 · day 1</span></div>
+        <div class="daytxt"><span class="d" id="dayname">Monday</span><span class="w lbl" id="weektxt">Week 1 · day 1</span></div>
       </div>
       <div class="seg" role="group" aria-label="Pause and speed">
         <button id="btnPause" aria-pressed="false" title="Pause (space)">Pause</button>
@@ -197,62 +313,90 @@
       <button class="btn" id="btnEnd" hidden title="End this endless run and see the recap">End run</button>
       <button class="btn icon" id="btnSound" title="Sound" aria-label="Sound on" aria-pressed="true"></button>
       <button class="btn icon" id="btnHelp" title="How to play" aria-label="How to play">?</button>
+      <button class="btn icon" id="menuBtn" aria-label="Menu" aria-expanded="false" aria-controls="menu"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="5" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="19" cy="12" r="2.2" fill="currentColor"/></svg></button>
     </div>
   </header>
+  <div id="menu" hidden role="menu">
+    <div class="mhead"><span class="lbl" id="menuCity"></span></div>
+    <button class="mrow" id="mPause" role="menuitem"><span>Pause</span><span class="hint">Space</span></button>
+    <div class="mrow" role="none"><span>Speed</span><span class="mseg" role="group" aria-label="Speed"><button id="mSpeed1" aria-pressed="true">1×</button><button id="mSpeed2" aria-pressed="false">2×</button></span></div>
+    <button class="mrow" id="mSound" role="menuitem"><span>Sound</span><span class="hint" id="mSoundV">On</span></button>
+    <div class="mrow" role="none"><span>Theme</span><span class="mseg" role="group" aria-label="Theme"><button data-theme="system" aria-pressed="true">Sys</button><button data-theme="light" aria-pressed="false">Light</button><button data-theme="dark" aria-pressed="false">Dark</button></span></div>
+    <button class="mrow" id="mHelp" role="menuitem"><span>How to play</span><span class="hint">?</span></button>
+    <button class="mrow" id="mEnd" role="menuitem" hidden><span>End run</span></button>
+  </div>
 
   <div id="bottom">
-    <div id="coach"><span id="hint"></span><button id="btnRemoveLine" hidden>Remove line</button></div>
-    <div id="banner" hidden>
-      <svg viewBox="0 0 32 20" width="30" height="18" aria-hidden="true"><rect x="2" y="3" width="28" height="14" rx="5" fill="currentColor"/><circle cx="10" cy="10" r="2.5" fill="var(--ink)"/><circle cx="17" cy="10" r="2.5" fill="var(--ink)"/><circle cx="24" cy="10" r="2.5" fill="var(--ink)"/></svg>
-      <span id="bannerText"></span>
-      <button id="btnLater">Keep in depot</button>
-    </div>
-    <div id="tray">
-      <div class="group"><span class="glbl">Lines</span><div class="pills" id="pills"></div></div>
-      <span class="vdiv"></span>
-      <div class="group"><span class="glbl">Depot</span><div class="tokens" id="tokens"></div></div>
-    </div>
-  </div>
-
-  <div class="overlay" id="startOv">
-    <div class="card">
-      <div class="eyebrow">A transit puzzle</div>
-      <h1>Tiny Transit</h1>
-      <p>Stations keep appearing. Draw lines between them and keep the passengers moving. When a station stays crowded for too long, the network shuts down.</p>
-      <div class="pick"><span class="glbl">City</span><div class="pickrow" id="cityPick"></div></div>
-      <div class="pick"><span class="glbl">Mode</span><div class="pickrow" id="modePick"></div></div>
-      <div class="swatches" aria-hidden="true"></div>
-      <div class="row"><button class="btn primary" id="btnStart">Start</button><button class="btn quiet" id="btnDaily">Today's daily</button><button class="btn quiet" id="btnRules">How to play</button></div>
-      <p class="muted" id="dailyNote"></p>
-    </div>
-  </div>
-
-  <div class="overlay" id="rewardOv" hidden>
-    <div class="card">
-      <div class="stack">
-        <div class="eyebrow" id="rewardEyebrow">Monday · Week 1 complete</div>
-        <h2>Your depot grows</h2>
+    <div class="trayw">
+      <div id="toasts" aria-live="off"></div>
+      <div id="banner" hidden>
+        <svg id="bannerIcon" viewBox="0 0 32 20" width="30" height="18" aria-hidden="true"><rect x="2" y="3" width="28" height="14" fill="currentColor"/><circle cx="10" cy="10" r="2.5" fill="var(--ink)"/><circle cx="17" cy="10" r="2.5" fill="var(--ink)"/><circle cx="24" cy="10" r="2.5" fill="var(--ink)"/></svg>
+        <span id="bannerText"></span>
+        <span class="esc">Esc cancels</span>
+        <button id="btnLater">Keep in depot</button>
       </div>
+      <div id="tray">
+        <div class="cell coach"><span class="lbl">Coach</span><div id="coachText" aria-live="polite"></div></div>
+        <div class="cell"><span class="lbl">Lines</span><div class="pills" id="pills"></div></div>
+        <div class="cell"><span class="lbl">Depot</span><div class="tokens" id="tokens"></div></div>
+      </div>
+      <button class="btn secondary" id="btnRemoveLine" hidden>Remove line</button>
+    </div>
+  </div>
+  <div id="refusal" hidden role="alert"></div>
+
+  <div class="page" id="startOv">
+    <div class="start">
+      <div>
+        <div class="kicker">A transit puzzle</div>
+        <h1>Tiny Transit</h1>
+        <p class="pitch">Stations keep appearing. Draw lines between them and keep the passengers moving. When a station stays crowded for too long, the network shuts down.</p>
+        <div class="rule"></div>
+        <div class="cells2">
+          <div class="cellinfo"><span class="lbl">Today's daily</span><b id="dailyName">Riverside · Normal</b><span id="dailyBest">Same map for everyone · your best today 0</span></div>
+          <div class="cellinfo"><span class="lbl">Personal best</span><b id="pbVal">0 carried</b><span id="pbWhere">No runs yet</span></div>
+        </div>
+        <div class="startBtns">
+          <button class="btn primary" id="btnStart">Start</button>
+          <button class="btn secondary" id="btnDaily">Play today's daily</button>
+          <button class="btn ghost" id="btnRules">How to play</button>
+        </div>
+        <div class="phoneOnly foot" style="justify-content: space-between; align-items: center; margin-top: 16px"><span id="pbPhone">Personal best 0</span><button class="btn ghost" id="btnRules2" style="height: 36px">How to play</button></div>
+        <p class="foot" id="footNote">Light / Dark: follows system · Sound on</p>
+      </div>
+      <div>
+        <div class="pick"><span class="lbl">City</span><div class="rule"></div><div class="optgrid" id="cityPick"></div></div>
+        <div class="pick"><span class="lbl">Mode</span><div class="rule"></div><div class="optgrid" id="modePick"></div></div>
+        <div class="swrow" id="swrow" aria-hidden="true"></div>
+        <p class="caption">8 lines. Three to start, one more each Monday you choose it.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="page" id="helpOv" hidden>
+    <div class="help">
+      <div class="helphead"><div><div class="kicker">How to play</div><h1>Draw the map, ride the map</h1></div><button class="btn secondary" id="btnHelpClose">Back</button></div>
+      <ul class="rules" id="rulesList"></ul>
+      <p class="shortcuts">Space pause · 1 · 2 speed · Esc cancel placement / deselect · A–H select a line · Delete remove the selected line</p>
+    </div>
+  </div>
+
+  <div class="overlay center" id="rewardOv" hidden>
+    <div class="card" role="dialog" aria-labelledby="rewardTitle">
+      <div class="stack"><div class="kicker" id="rewardEyebrow">Monday · Week 1 complete</div><h2 id="rewardTitle">Your depot grows</h2></div>
       <div class="always">
-        <span class="tile"><svg viewBox="0 0 32 20" width="32" height="20" aria-hidden="true"><rect x="2" y="3" width="28" height="14" rx="5" fill="currentColor"/><circle cx="10" cy="10" r="2.5" fill="var(--panel-solid)"/><circle cx="17" cy="10" r="2.5" fill="var(--panel-solid)"/><circle cx="24" cy="10" r="2.5" fill="var(--panel-solid)"/></svg></span>
-        <div class="txt"><b>Locomotive</b><span>Every week. Goes to the depot until you place it on a line.</span></div>
+        <span class="tile"><svg viewBox="0 0 32 20" width="32" height="20" aria-hidden="true"><rect x="2" y="3" width="28" height="14" fill="currentColor"/><circle cx="10" cy="10" r="2.5" fill="var(--bg)"/><circle cx="17" cy="10" r="2.5" fill="var(--bg)"/><circle cx="24" cy="10" r="2.5" fill="var(--bg)"/></svg></span>
+        <div class="txt"><b>Locomotive</b><span>Every week. Waits in the depot until you place it on a line.</span></div>
         <span class="tag">Always</span>
       </div>
-      <div class="stack">
-        <div class="eyebrow">Choose one</div>
-        <div class="choices" id="choices"></div>
-      </div>
-      <p class="muted">The map is paused while you decide.</p>
+      <div class="stack"><span class="lbl">Choose one</span><div class="choices" id="choices" role="radiogroup" aria-label="Choose one upgrade"></div></div>
+      <div class="cardfoot"><span class="muted">The map is paused while you decide.</span><button class="btn primary" id="btnTake" disabled>Take</button></div>
     </div>
   </div>
 
   <div class="overlay" id="overOv" hidden>
-    <div class="card">
-      <div class="stack">
-        <div class="eyebrow warn" id="overEyebrow">Network closed</div>
-        <h2 id="overTitle">A station was crowded for too long</h2>
-        <p class="muted" id="overSub"></p>
-      </div>
+    <div class="card" role="dialog" aria-labelledby="overTitle">
+      <div class="stack"><div class="kicker" id="overEyebrow">Network closed</div><h2 id="overTitle" style="font-size: 30px">A station was crowded for too long</h2><p class="muted" id="overSub"></p></div>
       <div class="stats">
         <div class="stat"><b id="overScore">0</b><span>passengers</span></div>
         <div class="stat"><b id="overDays">0</b><span>days</span></div>
@@ -261,16 +405,7 @@
       </div>
       <ul class="recap" id="overRecap"></ul>
       <div class="tip"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span id="overTip"></span></div>
-      <div class="row"><button class="btn primary" id="btnAgain">Play again</button><button class="btn quiet" id="btnMenu">Change city</button><button class="btn quiet" id="btnCopy">Copy score</button></div>
-    </div>
-  </div>
-
-  <div class="overlay" id="helpOv" hidden>
-    <div class="card">
-      <div class="eyebrow">How to play</div>
-      <h2>Draw the map, ride the map</h2>
-      <ul class="rules" id="rulesList"></ul>
-      <div class="row"><button class="btn primary" id="btnHelpClose">Back</button></div>
+      <div class="btncol"><button class="btn primary" id="btnAgain">Play again</button><div class="btnrow"><button class="btn secondary" id="btnMenu">Change city</button><button class="btn secondary" id="btnCopy">Copy score</button></div></div>
     </div>
   </div>
 </div>
@@ -283,8 +418,12 @@
   const SHAPES = ['circle', 'triangle', 'square', 'star', 'pentagon', 'diamond', 'cross'];
   const COMMON = ['circle', 'triangle', 'square'];
   const RARE = ['star', 'pentagon', 'diamond', 'cross'];
-  const LINE_COLORS = ['#e0301e', '#1c6bd1', '#e5a800', '#2a9d4b', '#8a3ab9', '#f07d1f', '#12a5a5', '#e8559a'];
-  const LINE_NAMES = ['Red', 'Blue', 'Yellow', 'Green', 'Purple', 'Orange', 'Teal', 'Pink'];
+  // Palette "Signal": letters carry identity where hue fails; no line sits near the accent's hue.
+  const LINE_LIGHT = ['#0a5fd6', '#d98a00', '#1e8f5a', '#6d3fc4', '#0e93b5', '#c22e86', '#8a5a25', '#4a6a86'];
+  const LINE_DARK = ['#6aa6ff', '#ffb020', '#3ecf8a', '#a98cff', '#3fd0f0', '#ff6fc2', '#d29a5c', '#9bb6cc'];
+  const LINE_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  const LINE_CSS = LINE_NAMES.map((l) => `var(--line-${l.toLowerCase()})`);
+  const LC = (i) => (theme.dark ? LINE_DARK : LINE_LIGHT)[i];
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const CFG = {
@@ -292,53 +431,92 @@
     overcrowdLimit: 40, stationR: 11, lineWidth: 8, lineGap: 10, capLen: 28, maxLines: 8, startLines: 3, riverWidth: 34, riverClear: 40,
   };
   const CITIES = {
-    riverside: { name: 'Riverside', desc: 'One river across the map. Three tunnels to start.', rivers: 1, tunnels: 3, stationRate: 1, passengerRate: 1 },
-    twinrivers: { name: 'Twin Rivers', desc: 'Two rivers, three banks. Four tunnels to start.', rivers: 2, tunnels: 4, stationRate: 1, passengerRate: 0.95 },
-    drybasin: { name: 'Dry Basin', desc: 'No water, but stations come fast and crowds run heavy.', rivers: 0, tunnels: 0, stationRate: 1.3, passengerRate: 1.15 },
+    riverside: { name: 'Riverside', desc: 'One river. 3 tunnels.', short: '1 river · 3 tunnels', rivers: 1, tunnels: 3, stationRate: 1, passengerRate: 1 },
+    twinrivers: { name: 'Twin Rivers', desc: 'Two rivers, three banks. 4 tunnels.', short: '2 rivers · 4 tunnels', rivers: 2, tunnels: 4, stationRate: 1, passengerRate: 0.95 },
+    drybasin: { name: 'Dry Basin', desc: 'No water. Fast stations, heavy crowds.', short: 'No water · fast', rivers: 0, tunnels: 0, stationRate: 1.3, passengerRate: 1.15 },
   };
   const MODES = {
     normal: { name: 'Normal', desc: 'A crowded station ends the run.' },
-    zen: { name: 'Endless', desc: 'No game over. Overflowing passengers give up and leave.' },
-    extreme: { name: 'Extreme', desc: 'Lines only grow. No retracting, removing, bypassing or opening loops.' },
+    zen: { name: 'Endless', desc: 'No game over. Overflow gives up and leaves.' },
+    extreme: { name: 'Extreme', desc: 'Lines only grow. No retract, remove, bypass or open.' },
   };
   const PAD = { top: 84, side: 24 };
-  const padBottomFor = (w) => (w < 600 ? 170 : 130);
+  const padBottomFor = (w) => (w < 720 ? 190 : 130);
   const padBottom = () => padBottomFor(W);
-  // The daily is generated on this fixed layout so every screen gets the same map, fitted to its play area.
   const REF = { W: 1280, H: 800 };
+  const isPhone = () => W < 720;
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
   const canvas = $('c');
   const ctx = canvas.getContext('2d');
   const ui = {
-    score: $('score'), scoreSub: $('scoreSub'), clock: $('clock'), dayname: $('dayname'), weektxt: $('weektxt'),
-    hint: $('hint'), btnRemoveLine: $('btnRemoveLine'), banner: $('banner'), bannerText: $('bannerText'),
-    pills: $('pills'), tokens: $('tokens'),
+    score: $('score'), scoreSub: $('scoreSub'), clock: $('clock'), clockWrap: $('clockWrap'), dayname: $('dayname'), weektxt: $('weektxt'),
+    coachText: $('coachText'), btnRemoveLine: $('btnRemoveLine'), banner: $('banner'), bannerText: $('bannerText'), bannerIcon: $('bannerIcon'), toasts: $('toasts'), refusal: $('refusal'),
+    pills: $('pills'), tokens: $('tokens'), pauseFrame: $('pauseFrame'), pauseTab: $('pauseTab'), srPolite: $('srPolite'), srAssertive: $('srAssertive'),
     startOv: $('startOv'), rewardOv: $('rewardOv'), overOv: $('overOv'), helpOv: $('helpOv'),
-    cityPick: $('cityPick'), modePick: $('modePick'), dailyNote: $('dailyNote'),
-    choices: $('choices'), rewardEyebrow: $('rewardEyebrow'),
+    cityPick: $('cityPick'), modePick: $('modePick'), swrow: $('swrow'), dailyName: $('dailyName'), dailyBest: $('dailyBest'), pbVal: $('pbVal'), pbWhere: $('pbWhere'), pbPhone: $('pbPhone'), footNote: $('footNote'),
+    choices: $('choices'), rewardEyebrow: $('rewardEyebrow'), btnTake: $('btnTake'),
     overEyebrow: $('overEyebrow'), overTitle: $('overTitle'), overSub: $('overSub'), overScore: $('overScore'), overDays: $('overDays'),
     overStations: $('overStations'), overBest: $('overBest'), overBestLbl: $('overBestLbl'), overTip: $('overTip'), overRecap: $('overRecap'),
     btnPause: $('btnPause'), btnSpeed1: $('btnSpeed1'), btnSpeed2: $('btnSpeed2'), btnEnd: $('btnEnd'), btnSound: $('btnSound'), btnHelp: $('btnHelp'),
-    btnStart: $('btnStart'), btnDaily: $('btnDaily'), btnRules: $('btnRules'), btnAgain: $('btnAgain'), btnMenu: $('btnMenu'), btnCopy: $('btnCopy'),
+    menuBtn: $('menuBtn'), menu: $('menu'), menuCity: $('menuCity'), mPause: $('mPause'), mSpeed1: $('mSpeed1'), mSpeed2: $('mSpeed2'), mSound: $('mSound'), mSoundV: $('mSoundV'), mHelp: $('mHelp'), mEnd: $('mEnd'),
+    btnStart: $('btnStart'), btnDaily: $('btnDaily'), btnRules: $('btnRules'), btnRules2: $('btnRules2'), btnAgain: $('btnAgain'), btnMenu: $('btnMenu'), btnCopy: $('btnCopy'),
     btnHelpClose: $('btnHelpClose'), btnLater: $('btnLater'),
   };
 
   let W = 0, H = 0, DPR = 1;
   let G = null;
   let drag = null;
-  let hover = null, hoverCap = null;
+  let hover = null, hoverCap = null, hoverHandle = null;
   let pointer = { x: 0, y: 0 };
-  let pressTimer = null, pressPos = null;
-  let theme = { ink: '#1f1e1b', bg: '#f4f3ee', muted: '#6f6c64', warn: '#d9412b', river: '#cfdfe9', river2: '#e2edf3' };
+  let pressTimer = null, pressPos = null, pressLoop = null;
+  let theme = { dark: false, ink: '#201e1d', bg: '#f3f2f2', muted: '#605d5d', accent: '#ec3013', riverBank: '#d6dde3', river: '#e3e9ee' };
   let themeAt = 0;
-  let hintOverride = null, hintUntil = 0;
   let pairSlots = new Map();
   let pick = { city: 'riverside', mode: 'normal' };
   let helpFrom = null;
-  let fontFamily = 'sans-serif';
+  let fontFamily = 'Archivo, system-ui, sans-serif';
+  let coachShown = '';
+  let refusalTimer = null;
+  let rewardPick = null;
+  let loopCoached = false;
+  const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // ---------- messaging layers: coach (persistent), toast (2.4s), refusal (anchored) ----------
+  function setCoach(text) {
+    if (text === coachShown) return;
+    coachShown = text;
+    if (reducedMotion()) { ui.coachText.textContent = text; return; }
+    ui.coachText.classList.add('fade');
+    setTimeout(() => { ui.coachText.textContent = text; ui.coachText.classList.remove('fade'); }, 150);
+  }
+  function toast(text, letterIdx) {
+    const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status');
+    if (letterIdx != null) { const chip = document.createElement('span'); chip.className = 'chip'; chip.style.background = LINE_CSS[letterIdx]; chip.textContent = LINE_NAMES[letterIdx]; el.appendChild(chip); }
+    el.appendChild(document.createTextNode(text));
+    ui.toasts.appendChild(el);
+    while (ui.toasts.children.length > 2) ui.toasts.removeChild(ui.toasts.firstChild);
+    setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 220); }, 2400);
+  }
+  function refuse(main, sub, x, y) {
+    const r = ui.refusal;
+    r.innerHTML = ''; r.appendChild(document.createTextNode(main));
+    if (sub) { const s = document.createElement('small'); s.textContent = sub; r.appendChild(s); }
+    r.hidden = false;
+    const px = x != null ? x : pointer.x, py = y != null ? y : pointer.y;
+    const rect = canvas.getBoundingClientRect();
+    const w = r.offsetWidth, h = r.offsetHeight;
+    const left = Math.max(8, Math.min(W - w - 8, rect.left + px - w / 2));
+    const top = Math.max(8, rect.top + py - 12 - h);
+    r.style.left = left + 'px'; r.style.top = top + 'px';
+    r.classList.remove('shake'); void r.offsetWidth; if (!reducedMotion()) r.classList.add('shake');
+    clearTimeout(refusalTimer); refusalTimer = setTimeout(() => { r.hidden = true; }, reducedMotion() ? 2400 : 1800);
+    announce(main + (sub ? '. ' + sub : ''), true);
+  }
+  function hideRefusal() { clearTimeout(refusalTimer); ui.refusal.hidden = true; }
+  function announce(text, assertive) { const el = assertive ? ui.srAssertive : ui.srPolite; el.textContent = ''; setTimeout(() => { el.textContent = text; }, 30); }
+  const flash = (text) => toast(text);
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) { /* storage unavailable */ } },
@@ -396,7 +574,7 @@
     const g = {
       city, mode, seed, daily: !!daily, rngState: seed | 0, paxState: (seed ^ 0x5bd1e995) | 0, rewardState: (seed ^ 0x27d4eb2d) | 0, ref,
       t: 0, day: 0, week: 1, score: 0, dayDelivered: 0, lastDayIdx: 0, over: false, paused: false, speed: 1, started: false,
-      stations: [], lines: [], trains: [], floats: [], rivers: [], riversRef: [], nextId: 1,
+      stations: [], lines: [], trains: [], floats: [], leavers: [], rivers: [], riversRef: [], nextId: 1,
       linesAvail: CFG.startLines, linesTotal: CFG.startLines, locosAvail: CFG.startLines, carriagesAvail: 0, interchangesAvail: 0,
       tunnelsTotal: CITIES[city].tunnels, tunnelsUsed: 0,
       spawnAcc: 0, nextStationAt: 0, rareUsed: [], placing: null, placeQueue: [], modal: null, rewardChoices: null,
@@ -500,7 +678,7 @@
     for (const [a, b] of remove || []) net -= pairCrossings(g, a, b);
     return net <= tunnelsAvail(g);
   }
-  function refuseTunnel() { flash('No tunnels left for that crossing. Two more come as a weekly reward.', 4); }
+  function refuseTunnel(x, y) { refuse('No tunnels left', 'Retract a crossing or choose Tunnels on Monday', x, y); }
   function nearRiver(g, x, y, d) {
     for (const rv of g.riversRef) for (let j = 1; j < rv.length; j++) if (segDist(x, y, rv[j - 1], rv[j]) < d) return true;
     return false;
@@ -664,7 +842,7 @@
   // ---------- lines ----------
   function availableColors(g) {
     const used = new Set(g.lines.map((l) => l.color));
-    return LINE_COLORS.map((_, i) => i).filter((i) => !used.has(i)).slice(0, Math.max(0, g.linesAvail));
+    return LINE_NAMES.map((_, i) => i).filter((i) => !used.has(i)).slice(0, Math.max(0, g.linesAvail));
   }
   function createLine(g, a, b, color) {
     const avail = availableColors(g);
@@ -675,7 +853,7 @@
     g.lines.push(line); g.linesAvail--; g.everDrew = true;
     rebuildAll(g); bump(g);
     if (g.locosAvail > 0) addTrain(g, line);
-    else flash(`The ${LINE_NAMES[color]} line has no train yet. The next locomotive arrives on Monday.`, 5);
+    else toast(`Line ${LINE_NAMES[color]} has no train yet · next locomotive on Monday`, color);
     return line;
   }
   function deleteLine(g, line) {
@@ -691,7 +869,7 @@
     g.linesAvail++; rebuildAll(g); bump(g);
   }
   const extreme = (g) => g.mode === 'extreme';
-  function refuseExtreme() { flash('Extreme: lines only grow.', 3); }
+  function refuseExtreme() { refuse('Extreme: lines only grow'); }
 
   // ---------- trains ----------
   // A new locomotive starts as far as possible from the trains already on the line.
@@ -751,7 +929,7 @@
       } else if (servesAhead(p.d)) keep.push(p);
       else st.passengers.push(p);
     }
-    if (delivered) g.floats.push({ x: st.x, y: st.y - 20, t: 0, text: '+' + delivered });
+    if (delivered) { g.floats.push({ x: st.x, y: st.y - 22, t: 0, text: '+' + delivered, kind: 'deliver' }); g.streak = (g.streak || 0) + delivered; }
     tr.passengers = keep;
     const cap = tr.cars * CFG.trainCap, wait = [];
     for (const p of st.passengers) {
@@ -790,15 +968,17 @@
     }
     for (const tr of g.trains) updateTrain(g, tr, dt);
     for (const f of g.floats) f.t += dt;
-    g.floats = g.floats.filter((f) => f.t < 1.2);
+    g.floats = g.floats.filter((f) => f.t < (f.kind === 'giveup' ? 1.2 : 0.9));
+    for (const lv of g.leavers) lv.t += dt;
+    g.leavers = g.leavers.filter((lv) => lv.t < 0.7);
     for (const st of g.stations) {
       const cap = capOf(st), crowded = st.passengers.length > cap;
-      if (crowded && !st.wasCrowded) { st.warnAt = g.t; sfx.crowd(); }
+      if (crowded && !st.wasCrowded) { st.warnAt = g.t; sfx.crowd(); announce(`Station crowding: ${st.shape}, ${st.passengers.length} waiting, ${CFG.overcrowdLimit} seconds`, true); }
       st.wasCrowded = crowded;
       if (crowded) {
         st.over += dt;
         if (st.over >= CFG.overcrowdLimit) {
-          if (g.mode === 'zen') { const gone = st.passengers.splice(cap); g.stats.gaveUp += gone.length; st.over = 0; flash(`${gone.length} passengers gave up waiting at the ${st.shape} station.`, 4); }
+          if (g.mode === 'zen') { const gone = st.passengers.splice(cap); g.stats.gaveUp += gone.length; st.over = 0; giveUp(g, st, gone); }
           else { gameOver(g, st); return; }
         }
       } else st.over = Math.max(0, st.over - dt * 1.5);
@@ -806,53 +986,69 @@
     if (g.day >= g.week * 7) { g.week++; offerReward(g); }
   }
   const hoursOf = (secs) => Math.round((secs / CFG.dayLength) * 24);
+  const waitLabel = (secs) => { const h = hoursOf(secs); return h >= 24 ? `${Math.floor(h / 24)} day${Math.floor(h / 24) === 1 ? '' : 's'} ${h % 24} h` : `${h} h`; };
+  const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  function giveUp(g, st, gone) {
+    for (let i = 0; i < gone.length; i++) g.leavers.push({ x: st.x + CFG.stationR + 16 + (i % 6) * 10, y: st.y - 4 + Math.floor(i / 6) * 10, d: gone[i].d, t: 0, sid: st.id });
+    g.floats.push({ x: st.x, y: st.y - 30, t: 0, text: `−${gone.length} gave up`, kind: 'giveup' });
+    announce(`${gone.length} passengers gave up at the ${st.shape} station`, false);
+  }
   function finishRun(g, st) {
-    g.over = true; g.failedStation = st ? st.id : null; g.placing = null; g.placeQueue = []; g.selectedLine = null; ui.banner.hidden = true;
+    g.over = true; g.failedStation = st ? st.id : null; g.placing = null; g.placeQueue = []; g.selectedLine = null; ui.banner.hidden = true; closeMenu();
     ensureRides(g);
-    const when = `${DAYS[Math.floor(g.day) % 7]}, week ${g.week}`;
+    const dayName = DAYS[Math.floor(g.day) % 7];
+    const when = `${isPhone() ? dayName.slice(0, 3) : dayName}, week ${g.week}`;
+    let lines = [];
     if (st) {
-      const ls = g.linesAt.get(st.id) || [];
-      const where = ls.length ? `on the ${ls.map((l) => LINE_NAMES[l.color]).join(' and ')} line${ls.length > 1 ? 's' : ''}` : 'with no line';
-      ui.overEyebrow.textContent = `Network closed · ${when}`;
-      ui.overTitle.textContent = `The ${st.shape} station ${where} was crowded for too long`;
+      lines = g.linesAt.get(st.id) || [];
       const counts = {}; for (const p of st.passengers) counts[p.d] = (counts[p.d] || 0) + 1;
       const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-      ui.overSub.textContent = top ? `${st.passengers.length} passengers were waiting, most of them for a ${top[0]}.` : `${st.passengers.length} passengers were waiting.`;
-      ui.overTip.textContent = ls.length ? 'An interchange where two lines meet keeps a busy station breathing. A second locomotive on the line that loops back helps too.' : 'A station with no line fills up fast. Extend a nearby line to it as soon as it appears.';
-      sfx.over();
+      ui.overEyebrow.textContent = `Network closed · ${when}`;
+      ui.overTitle.textContent = `The ${st.shape} station was crowded for too long`;
+      const reach = lines.length ? `Lines ${lines.map((l) => LINE_NAMES[l.color]).join(' and ')} called there. ` : 'No line reached it. ';
+      ui.overSub.textContent = `${reach}${st.passengers.length} passengers were waiting${top ? `, most of them for a ${top[0]}` : ''}.`;
+      ui.overTip.textContent = lines.length ? 'An interchange where two lines meet keeps a busy station breathing. A second locomotive on the line that loops back helps too.' : 'A station with no line fills fast. Drag the nearest cap to it as soon as it appears — the coach will point at it.';
+      g.failLabel = `${cap1(st.shape)} · ${lines.length ? 'line ' + lines.map((l) => LINE_NAMES[l.color]).join(', ') : 'no line'} · ${st.passengers.length} waiting`;
+      sfx.over(); announce(`Network closed. The ${st.shape} station was crowded for too long.`, true);
     } else {
       ui.overEyebrow.textContent = `Run ended · ${when}`;
       ui.overTitle.textContent = 'You closed the network on your own terms';
       ui.overSub.textContent = g.stats.gaveUp ? `${g.stats.gaveUp} passengers gave up waiting along the way.` : 'Nobody gave up waiting.';
       ui.overTip.textContent = 'Endless runs never end by themselves. Try the same city in Normal to see how far the network holds.';
+      g.failLabel = null;
     }
     ui.overScore.textContent = g.score;
     ui.overDays.textContent = Math.floor(g.day);
     ui.overStations.textContent = g.stations.length;
     const prev = bestFor(g), isBest = g.score > prev;
-    if (isBest) { store.set(bestKey(g), g.score); g.best = g.score; }
+    if (isBest) { store.set(bestKey(g), g.score); store.set('tt_pb', JSON.stringify({ score: g.score, city: g.city, mode: g.mode, week: g.week })); g.best = g.score; }
     ui.overBest.textContent = Math.max(prev, g.score); ui.overBest.classList.toggle('dim', !isBest);
     ui.overBestLbl.textContent = isBest ? 'new best' : 'best';
-    // recap
-    const rows = [];
+    const rows = [['Map', `${CITIES[g.city].name} · ${MODES[g.mode].name} · ${seedLabel(g)}`]];
+    rows.push(['Lines drawn', g.lines.length ? g.lines.map((l) => `${LINE_NAMES[l.color]} (${l.stations.length} stops)`).join(' · ') : 'none']);
+    if (g.stats.waitN) {
+      const busiest = Object.entries(g.stats.boardings).sort((a, b) => b[1] - a[1])[0];
+      const bs = busiest ? stationById(g, +busiest[0]) : null;
+      rows.push(['Longest wait', `${waitLabel(g.stats.longestWait)}${bs ? ` · busiest at the ${bs.shape}` : ''}`]);
+    } else rows.push(['Longest wait', 'no passenger reached a station']);
     const topLine = Object.entries(g.stats.byLine).sort((a, b) => b[1] - a[1])[0];
     if (topLine) rows.push(['Top line', `${LINE_NAMES[topLine[0]]} · ${topLine[1]} carried`]);
-    const busiest = Object.entries(g.stats.boardings).sort((a, b) => b[1] - a[1])[0];
-    if (busiest) { const bs = stationById(g, +busiest[0]); if (bs) rows.push(['Busiest station', `the ${bs.shape} · ${busiest[1]} boardings`]); }
-    if (g.stats.waitN) rows.push(['Longest wait', `${hoursOf(g.stats.longestWait)}h · average ${hoursOf(g.stats.waitSum / g.stats.waitN)}h`]);
-    rows.push(['Map', `${CITIES[g.city].name} · ${MODES[g.mode].name} · ${seedLabel(g)}`]);
     ui.overRecap.innerHTML = rows.map(([k, v]) => `<li><span>${k}</span><span>${v}</span></li>`).join('');
     ui.btnCopy.textContent = 'Copy score';
+    // dock the card away from the failed station; phone: bottom sheet
+    ui.overOv.className = 'overlay' + (st ? (isPhone() ? ' sheet' : ' side' + (st.x < W / 2 ? ' right' : '')) : ' center');
     ui.overOv.hidden = false;
   }
   const gameOver = (g, st) => finishRun(g, st);
 
-  const rewardDefs = () => ({
-    line: { t: 'New line', d: `Another route to draw. The city plan allows ${CFG.maxLines}.`, ic: '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M4 17 L10 11 L20 11" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
-    carriage: { t: 'Carriage', d: 'Adds 6 seats to one train. Tap the train you want it on.', ic: TOKEN_SVG.carriage },
-    interchange: { t: 'Interchange', d: 'One station waits 12 instead of 6 and trains stop there in half the time.', ic: TOKEN_SVG.interchange },
-    tunnel: { t: 'Tunnels', d: 'Two more river crossings for your lines.', ic: TOKEN_SVG.tunnel },
+  // ---------- weekly reward ----------
+  const rewardDefs = (g) => ({
+    line: { t: `Line ${LINE_NAMES[nextLetter(g)]}`, d: 'A new colour in the tray, with its own train.', ic: `<span class="ic sw" style="background:${LINE_CSS[nextLetter(g)]}">${LINE_NAMES[nextLetter(g)]}</span>` },
+    carriage: { t: 'Carriage', d: 'Adds 6 seats to the train you tap.', ic: `<span class="ic">${TOKEN_SVG.carriage}</span>` },
+    interchange: { t: 'Interchange', d: 'One station holds 12 instead of 6, and trains stop there in half the time.', ic: `<span class="ic">${TOKEN_SVG.interchange}</span>` },
+    tunnel: { t: 'Tunnels ×2', d: `Two more river crossings. Budget goes ${tunnelsAvail(g)}/${g.tunnelsTotal} → ${tunnelsAvail(g) + 2}/${g.tunnelsTotal + 2}.`, ic: `<span class="ic">${TOKEN_SVG.tunnel}</span>` },
   });
+  function nextLetter(g) { const used = new Set(g.lines.map((l) => l.color)); for (let i = 0; i < CFG.maxLines; i++) if (!used.has(i)) return i; return 0; }
   function offerReward(g) {
     g.modal = 'reward'; g.selectedLine = null; sfx.week();
     const pool = [];
@@ -860,42 +1056,48 @@
     pool.push('carriage', 'interchange');
     if (hasRivers(g)) pool.push('tunnel');
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng(g, 'rewardState') * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-    g.rewardChoices = pool.slice(0, 2);
+    g.rewardChoices = pool.slice(0, 3);
     showReward(g);
   }
   function showReward(g) {
-    const defs = rewardDefs();
+    const defs = rewardDefs(g);
     ui.rewardEyebrow.textContent = `Monday · Week ${g.week - 1} complete`;
-    ui.choices.innerHTML = '';
+    ui.choices.innerHTML = ''; rewardPick = null;
     for (const k of g.rewardChoices) {
       const c = defs[k], b = document.createElement('button');
-      b.className = 'choice'; b.type = 'button';
-      b.innerHTML = `<span class="ic">${c.ic}</span><strong>${c.t}</strong><span>${c.d}</span>`;
-      b.addEventListener('click', () => chooseReward(g, k));
+      b.className = 'choice'; b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false'); b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = `${c.ic}<strong>${c.t}</strong><span>${c.d}</span>`;
+      b.addEventListener('click', () => {
+        rewardPick = k;
+        for (const o of ui.choices.children) { const on = o === b; o.setAttribute('aria-pressed', String(on)); o.setAttribute('aria-checked', String(on)); }
+        ui.btnTake.disabled = false; ui.btnTake.textContent = `Take ${c.t}`;
+      });
       ui.choices.appendChild(b);
     }
-    ui.rewardOv.hidden = false;
+    ui.btnTake.disabled = true; ui.btnTake.textContent = 'Take';
+    ui.rewardOv.hidden = false; closeMenu();
+    announce(`Monday. Choose one upgrade: ${g.rewardChoices.map((k) => defs[k].t).join(', ')}`, false);
   }
+  ui.btnTake.addEventListener('click', () => { if (G && rewardPick) chooseReward(G, rewardPick); });
   function chooseReward(g, k) {
-    ui.rewardOv.hidden = true; g.modal = null; g.rewardChoices = null;
+    ui.rewardOv.hidden = true; g.modal = null; g.rewardChoices = null; rewardPick = null;
     g.locosAvail++;
     g.placeQueue.push('loco');
-    if (k === 'line') { g.linesAvail++; g.linesTotal++; flash(`${LINE_NAMES[availableColors(g).slice(-1)[0]] || 'A new'} line is ready in the tray.`, 5); }
+    if (k === 'line') { const li = nextLetter(g); g.linesAvail++; g.linesTotal++; toast(`Line ${LINE_NAMES[li]} ready`, li); }
     if (k === 'carriage') { g.carriagesAvail++; g.placeQueue.push('carriage'); }
     if (k === 'interchange') { g.interchangesAvail++; g.placeQueue.push('interchange'); }
-    if (k === 'tunnel') { g.tunnelsTotal += 2; flash(`Two tunnels added. ${tunnelsAvail(g)} available.`, 4); }
+    if (k === 'tunnel') { g.tunnelsTotal += 2; toast(`Tunnels +2 · ${tunnelsAvail(g)}/${g.tunnelsTotal}`); }
     nextPlacement(g);
   }
-  const PLACE_TEXT = { loco: 'Tap a line for the locomotive', carriage: 'Tap a train for the carriage', interchange: 'Tap a station to make it an interchange' };
+  const PLACE_TEXT = { loco: 'Placing a locomotive — tap a line on the map', carriage: 'Placing a carriage — tap a train', interchange: 'Placing an interchange — tap a station' };
   function nextPlacement(g) {
     const avail = { loco: g.locosAvail, carriage: g.carriagesAvail, interchange: g.interchangesAvail };
     g.placing = null;
-    // items with no valid target stay in the depot; keep going so the rest of the queue is still offered
     while (g.placeQueue.length) {
       const k = g.placeQueue.shift();
       if (!avail[k]) continue;
-      if (k === 'loco' && !g.lines.length) { flash('The locomotive waits in the depot until you draw a line.', 5); continue; }
-      if (k === 'carriage' && !g.trains.length) { flash('The carriage waits in the depot until a train is running.', 5); continue; }
+      if (k === 'loco' && !g.lines.length) { toast('Locomotive waits in the depot until you draw a line'); continue; }
+      if (k === 'carriage' && !g.trains.length) { toast('Carriage waits in the depot until a train is running'); continue; }
       g.placing = k; break;
     }
     if (!g.placing) { ui.banner.hidden = true; renderHud(); return; }
@@ -909,10 +1111,10 @@
     const kind = g.placing;
     if (kind === 'interchange') {
       const st = hitStation(g, x, y);
-      if (!st) { flash('Tap a station.', 2); return; }
-      if (st.interchange) { flash('That station is already an interchange.', 3); return; }
+      if (!st) { refuse('Tap a station'); return; }
+      if (st.interchange) { refuse('Already an interchange'); return; }
       st.interchange = true; g.interchangesAvail--; sfx.place();
-      flash(`The ${st.shape} station is now an interchange.`, 3);
+      toast(`The ${st.shape} is now an interchange`);
       nextPlacement(g); return;
     }
     if (kind === 'carriage') {
@@ -921,17 +1123,18 @@
         const h = hitLine(g, x, y);
         if (h) { const trains = g.trains.filter((t) => t.lineId === h.line.id); trains.sort((a, b) => b.passengers.length / b.cars - a.passengers.length / a.cars || a.cars - b.cars); tr = trains[0] || null; }
       }
-      if (!tr) { flash('Tap a train, or its line for the fullest train.', 3); return; }
+      if (!tr) { refuse('Tap a train', 'Or its line, for the fullest train'); return; }
       tr.cars++; g.carriagesAvail--; sfx.place();
-      flash(`Carriage attached on the ${LINE_NAMES[lineById(g, tr.lineId).color]} line. ${tr.cars} cars now.`, 3);
+      const li = lineById(g, tr.lineId).color;
+      toast(`Carriage attached on line ${LINE_NAMES[li]} · ${tr.cars} cars`, li);
       nextPlacement(g); return;
     }
     let line = null;
     const st = hitStation(g, x, y);
-    if (st) { ensureRides(g); const ls = g.linesAt.get(st.id) || []; if (ls.length === 1) line = ls[0]; else if (ls.length > 1) { flash('That station is on several lines. Tap the line itself.', 3); return; } }
+    if (st) { ensureRides(g); const ls = g.linesAt.get(st.id) || []; if (ls.length === 1) line = ls[0]; else if (ls.length > 1) { refuse('Several lines stop here', 'Tap the line itself'); return; } }
     if (!line) { const h = hitLine(g, x, y); if (h) line = h.line; }
-    if (!line) { flash('Tap a line.', 2); return; }
-    addTrain(g, line); sfx.place(); flash(`Locomotive added to the ${LINE_NAMES[line.color]} line.`, 3);
+    if (!line) { refuse('Tap a line'); return; }
+    addTrain(g, line); sfx.place(); toast(`Locomotive added to line ${LINE_NAMES[line.color]}`, line.color);
     nextPlacement(g);
   }
 
@@ -973,47 +1176,73 @@
     for (let i = 0; i < line.sIdx.length - 1; i++) if (seg >= line.sIdx[i] && seg < line.sIdx[i + 1]) return i;
     return line.sIdx.length - 2;
   }
+  // Handles shown on the selected line: lettered caps, hollow segment midpoints (insert), stems above middle stops (bypass).
+  function lineHandles(g, line) {
+    const out = [];
+    const N = line.stations.length;
+    for (const cap of capPositions(g, line)) out.push({ kind: 'cap', line, end: cap.end, x: cap.x, y: cap.y });
+    const segCount = line.loop ? N : N - 1;
+    for (let i = 0; i < segCount; i++) {
+      const a = line.stationDist[i], b = i + 1 < N ? line.stationDist[i + 1] : line.total;
+      const p = pointAt(line, (a + b) / 2);
+      out.push({ kind: 'mid', line, seg: i, x: p.x, y: p.y });
+    }
+    line.stations.forEach((sid, i) => {
+      const middle = line.loop || (i > 0 && i < N - 1);
+      if (!middle) return;
+      const st = stationById(g, sid); if (!st) return;
+      out.push({ kind: 'stop', line, sid, x: st.x, y: st.y - CFG.stationR - 14, sx: st.x, sy: st.y });
+    });
+    return out;
+  }
+  function hitHandle(g, x, y) {
+    const line = lineById(g, g.selectedLine); if (!line) return null;
+    let bd = 22, best = null;
+    for (const h of lineHandles(g, line)) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } }
+    return best;
+  }
+  function pathSegOfStationSeg(line, i) { return line.sIdx[i]; }
 
   // ---------- input ----------
   function canvasPos(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
   function interactive() { return G && G.started && !G.over && !G.modal; }
+  function selectLine(id) { if (!G) return; G.selectedLine = id; if (id) { const l = lineById(G, id); if (l) announce(`Line ${LINE_NAMES[l.color]} selected`, false); } renderHud(); }
 
   function onDown(x, y) {
-    unlockAudio();
+    unlockAudio(); hideRefusal(); closeMenu();
     if (!interactive()) return;
     pointer = { x, y };
     if (G.placing) { handlePlaceClick(G, x, y); return; }
+    const hd = hitHandle(G, x, y);
+    if (hd) {
+      if (hd.kind === 'cap') drag = { mode: 'extend', line: hd.line, end: hd.end };
+      else if (hd.kind === 'mid') drag = { mode: 'insert', line: hd.line, seg: hd.seg, fromHandle: true };
+      else drag = { mode: 'bypass', line: hd.line, sid: hd.sid, sx: hd.sx, sy: hd.sy };
+      return;
+    }
     const cap = hitCap(G, x, y);
-    if (cap) { drag = { mode: 'extend', line: cap.line, end: cap.end }; G.selectedLine = null; return; }
+    if (cap) { drag = { mode: 'extend', line: cap.line, end: cap.end }; return; }
     const st = hitStation(G, x, y);
     if (st) {
-      const sel = lineById(G, G.selectedLine);
-      if (sel) {
-        const i = sel.stations.indexOf(st.id);
-        const middle = i > 0 && i < sel.stations.length - 1;
-        if (middle || (sel.loop && i >= 0)) { drag = { mode: 'bypass', line: sel, sid: st.id, sx: x, sy: y }; return; }
-      }
-      G.selectedLine = null;
-      if (G.linesAvail > 0) drag = { mode: 'new', from: st.id, color: null };
+      if (G.linesAvail > 0) { drag = { mode: 'new', from: st.id, color: null }; if (G.selectedLine) selectLine(null); }
       else {
         ensureRides(G);
         const ls = (G.linesAt.get(st.id) || []).filter((l) => !l.loop && (l.stations[0] === st.id || l.stations[l.stations.length - 1] === st.id));
         if (ls.length) drag = { mode: 'extend', line: ls[0], end: ls[0].stations[0] === st.id ? 'head' : 'tail' };
-        else flash(`All ${G.linesTotal} lines are drawn. Drag a line's end cap to extend it, or remove one from the tray.`, 4);
+        else refuse(`All ${G.linesTotal} lines are drawn`, 'Extend a cap, or remove a line from the tray');
       }
       return;
     }
     const h = hitLine(G, x, y);
-    G.selectedLine = h ? h.line.id : null;
-    if (h) drag = { mode: 'insert', line: h.line, seg: stationSegOfPathSeg(h.line, h.seg) };
-    renderHud();
-    pressPos = { x, y };
-    clearTimeout(pressTimer); pressTimer = null;
-    // long-press only means something on a loop; elsewhere it must not cancel a slow segment drag
-    if (h && h.line.loop) {
-      const g0 = G;
-      pressTimer = setTimeout(() => { pressTimer = null; if (G !== g0 || !interactive()) return; drag = null; breakLoopAt(x, y); }, 550);
-    }
+    if (h) {
+      if (G.selectedLine !== h.line.id) selectLine(h.line.id);
+      drag = { mode: 'insert', line: h.line, seg: stationSegOfPathSeg(h.line, h.seg) };
+      pressPos = { x, y }; clearTimeout(pressTimer); pressTimer = null; pressLoop = null;
+      if (h.line.loop) {
+        const g0 = G;
+        pressTimer = setTimeout(() => { pressTimer = null; if (G !== g0 || !interactive()) return; drag = null; pressLoop = { line: h.line, seg: h.seg, x, y }; }, 450);
+      }
+    } else if (G.selectedLine) selectLine(null);
   }
   function onMove(x, y) {
     pointer = { x, y };
@@ -1021,9 +1250,11 @@
     if (pressTimer && pressPos && Math.hypot(x - pressPos.x, y - pressPos.y) > 8) { clearTimeout(pressTimer); pressTimer = null; }
     const st = hitStation(G, x, y);
     hover = st ? st.id : null;
-    const cap = !st && !drag ? hitCap(G, x, y) : null;
+    const hd = !drag ? hitHandle(G, x, y) : null;
+    hoverHandle = hd;
+    const cap = !st && !drag && !hd ? hitCap(G, x, y) : null;
     hoverCap = cap ? cap.line.id + ':' + cap.end : null;
-    canvas.style.cursor = cap || (st && !drag) ? 'grab' : drag ? 'grabbing' : 'crosshair';
+    canvas.style.cursor = hd || cap || (st && !drag) ? 'grab' : drag ? 'grabbing' : 'crosshair';
     if (!drag || !interactive()) return;
     if (!st) return;
     if (drag.mode === 'bypass') return;
@@ -1039,7 +1270,7 @@
       if (!tunnelsFit(G, [[a, st.id], [st.id, b]], [[a, b]])) { refuseTunnel(); drag = null; return; }
       line.stations.splice(drag.seg + 1, 0, st.id);
       rebuildAll(G); bump(G); drag = null;
-      flash(`${LINE_NAMES[line.color]} line now calls at the ${st.shape}.`, 3);
+      toast(`Stop added to line ${LINE_NAMES[line.color]}`, line.color);
       return;
     }
     const line = drag.line;
@@ -1051,38 +1282,44 @@
     const neighborSid = line.stations[drag.end === 'head' ? 1 : N - 2];
     if (st.id === neighborSid && !line.loop) {
       if (extreme(G)) { refuseExtreme(); return; }
+      const refund = pairCrossings(G, endSid, neighborSid);
       if (N <= 2) { const color = line.color; deleteLine(G, line); drag = { mode: 'new', from: st.id, color }; }
       else { line.stations.splice(endIdx, 1); rebuildAll(G); bump(G); }
+      if (refund) toast(`Tunnel refunded · ${tunnelsAvail(G)}/${G.tunnelsTotal}`);
       return;
     }
     if (line.loop) return;
     const otherEnd = drag.end === 'head' ? line.stations[N - 1] : line.stations[0];
-    if (st.id === otherEnd && N >= 3) {
+    if (st.id === otherEnd) {
+      if (N < 3) { refuse('Loops need at least three stops'); return; }
       if (!tunnelsFit(G, [[endSid, otherEnd]])) { refuseTunnel(); return; }
       line.loop = true; rebuildAll(G); bump(G); drag = null;
-      flash('Loop closed. Loop trains run one way and faster. Long-press a segment to open it again.', 4); return;
+      toast(`Loop closed on line ${LINE_NAMES[line.color]} · trains run one way`, line.color);
+      if (!loopCoached) { loopCoached = true; G.loopCoachLine = line.id; }
+      return;
     }
-    if (line.stations.includes(st.id)) return;
+    if (line.stations.includes(st.id)) { refuse('Already on this line'); return; }
     if (!tunnelsFit(G, [[endSid, st.id]])) { refuseTunnel(); return; }
     if (drag.end === 'head') line.stations.unshift(st.id); else line.stations.push(st.id);
     rebuildAll(G); bump(G);
   }
   function onUp() {
-    if (drag && drag.mode === 'tray') flash('Drag the pill onto a station, then on to a second station.', 3);
+    if (pressLoop) { const pl = pressLoop; pressLoop = null; breakLoop(pl.line, pl.seg); }
+    if (drag && drag.mode === 'tray') refuse('Lines need two different stations', 'Drag the letter onto a station, then on to another');
     if (drag && drag.mode === 'bypass' && interactive()) {
       const { line, sid } = drag;
-      if (Math.hypot(pointer.x - drag.sx, pointer.y - drag.sy) > 30 && G.lines.includes(line)) {
+      if (Math.hypot(pointer.x - drag.sx, pointer.y - drag.sy) > 24 && G.lines.includes(line)) {
         if (extreme(G)) refuseExtreme();
         else {
           const i = line.stations.indexOf(sid), N = line.stations.length;
           const prev = line.stations[(i - 1 + N) % N], next = line.stations[(i + 1) % N];
           const st = stationById(G, sid);
-          if (N <= 3 && line.loop) flash('Open the loop first. A loop needs three stops.', 3);
+          if (N <= 3 && line.loop) refuse('Loops need at least three stops', 'Open the loop first');
           else if (!tunnelsFit(G, [[prev, next]], [[prev, sid], [sid, next]])) refuseTunnel();
           else {
             for (const tr of G.trains.filter((t) => t.lineId === line.id)) { const loc = locate(line, tr); if (loc && loc.from === sid && st) { st.passengers.push(...tr.passengers); tr.passengers = []; } }
             line.stations.splice(i, 1); rebuildAll(G); bump(G);
-            flash(`${LINE_NAMES[line.color]} line now bypasses the ${st ? st.shape : 'station'}.`, 3);
+            toast(`Stop bypassed on line ${LINE_NAMES[line.color]}`, line.color);
           }
         }
       }
@@ -1094,53 +1331,83 @@
   canvas.addEventListener('pointermove', (e) => { const p = canvasPos(e); onMove(p.x, p.y); });
   canvas.addEventListener('pointerup', onUp);
   canvas.addEventListener('pointercancel', onUp);
-  canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); if (!interactive()) return; const p = canvasPos(e); breakLoopAt(p.x, p.y); });
-  function breakLoopAt(x, y) {
-    const h = hitLine(G, x, y);
-    if (!h || !h.line.loop) return;
+  canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); if (!interactive()) return; const p = canvasPos(e); const h = hitLine(G, p.x, p.y); if (h && h.line.loop) breakLoop(h.line, h.seg); });
+  function breakLoop(line, pathSeg) {
+    if (!G.lines.includes(line) || !line.loop) return;
     if (extreme(G)) { refuseExtreme(); return; }
-    const line = h.line, k = stationSegOfPathSeg(line, h.seg), s = line.stations;
+    const k = stationSegOfPathSeg(line, pathSeg), s = line.stations;
     line.stations = [...s.slice(k + 1), ...s.slice(0, k + 1)];
     line.loop = false; rebuildAll(G); bump(G);
-    flash('Loop opened.', 2);
+    toast(`Loop opened on line ${LINE_NAMES[line.color]}`, line.color);
   }
   const overlayOpen = () => !ui.startOv.hidden || !ui.rewardOv.hidden || !ui.overOv.hidden || !ui.helpOv.hidden;
   window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !ui.menu.hidden) { closeMenu(); return; }
     if (!G || !G.started || overlayOpen()) return;
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
     if (e.code === 'Space') { e.preventDefault(); togglePause(); }
-    if (e.key === '1') setSpeed(1);
-    if (e.key === '2') setSpeed(2);
-    if (e.key === 'Escape') { if (G.placing) stopPlacement(G); G.selectedLine = null; renderHud(); }
+    else if (e.key === '1') setSpeed(1);
+    else if (e.key === '2') setSpeed(2);
+    else if (e.key === 'Escape') { if (G.placing) stopPlacement(G); else if (G.selectedLine) selectLine(null); }
+    else if (/^[a-hA-H]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const li = e.key.toUpperCase().charCodeAt(0) - 65; const line = G.lines.find((l) => l.color === li);
+      if (line) selectLine(G.selectedLine === line.id ? null : line.id); else refuse(`Line ${LINE_NAMES[li]} is not drawn`);
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && G.selectedLine) { e.preventDefault(); removeSelectedLine(); }
   });
+  function removeSelectedLine() {
+    const line = lineById(G, G.selectedLine); if (!line) return;
+    if (extreme(G)) { refuseExtreme(); return; }
+    if (G.placing) stopPlacement(G);
+    const li = line.color; deleteLine(G, line); renderHud();
+    toast(`Line ${LINE_NAMES[li]} removed · train back in depot`, li);
+  }
 
   // ---------- HUD ----------
-  function togglePause() { if (!G || G.over) return; G.paused = !G.paused; ui.btnPause.textContent = G.paused ? 'Resume' : 'Pause'; ui.btnPause.setAttribute('aria-pressed', String(G.paused)); }
-  function setSpeed(s) { if (!G) return; G.speed = s; ui.btnSpeed1.setAttribute('aria-pressed', String(s === 1)); ui.btnSpeed2.setAttribute('aria-pressed', String(s === 2)); }
+  const pausedNow = (g) => !!(g && (g.paused || g.modal === 'reward' || g.placing));
+  function togglePause() { if (!G || G.over || G.modal) return; G.paused = !G.paused; announce(G.paused ? 'Paused' : 'Resumed', false); renderHud(); }
+  function setSpeed(s) { if (!G) return; G.speed = s; ui.btnSpeed1.setAttribute('aria-pressed', String(s === 1)); ui.btnSpeed2.setAttribute('aria-pressed', String(s === 2)); ui.mSpeed1.setAttribute('aria-pressed', String(s === 1)); ui.mSpeed2.setAttribute('aria-pressed', String(s === 2)); }
   function launch(city, mode, seed, daily) {
-    G = newGame(city, mode, seed, daily); G.started = true;
-    setSpeed(1); ui.btnPause.textContent = 'Pause'; ui.btnPause.setAttribute('aria-pressed', 'false');
-    ui.banner.hidden = true; ui.startOv.hidden = true; ui.overOv.hidden = true; ui.btnEnd.hidden = mode !== 'zen';
-    hudKey = '';
+    G = newGame(city, mode, seed, daily); G.started = true; loopCoached = false;
+    setSpeed(1); closeMenu();
+    ui.banner.hidden = true; ui.startOv.hidden = true; ui.overOv.hidden = true; ui.helpOv.hidden = true;
+    ui.btnEnd.hidden = mode !== 'zen'; ui.mEnd.hidden = mode !== 'zen';
+    ui.toasts.innerHTML = ''; hideRefusal();
+    hudKey = ''; coachShown = ''; renderHud();
   }
+  function openMenu() { ui.menu.hidden = false; ui.menuBtn.setAttribute('aria-expanded', 'true'); ui.menuCity.textContent = G ? `${CITIES[G.city].name} · ${MODES[G.mode].name}${G.daily ? ' · daily' : ''}` : ''; ui.mSoundV.textContent = audio.muted ? 'Off' : 'On'; ui.mPause.querySelector('span').textContent = G && G.paused ? 'Resume' : 'Pause'; }
+  function closeMenu() { if (ui.menu.hidden) return; ui.menu.hidden = true; ui.menuBtn.setAttribute('aria-expanded', 'false'); }
+  ui.menuBtn.addEventListener('click', (e) => { e.stopPropagation(); if (ui.menu.hidden) openMenu(); else closeMenu(); });
+  document.addEventListener('pointerdown', (e) => { if (!ui.menu.hidden && !ui.menu.contains(e.target) && e.target !== ui.menuBtn && !ui.menuBtn.contains(e.target)) closeMenu(); });
+  ui.mPause.addEventListener('click', () => { togglePause(); openMenu(); });
+  ui.mSpeed1.addEventListener('click', () => setSpeed(1)); ui.mSpeed2.addEventListener('click', () => setSpeed(2));
+  ui.mSound.addEventListener('click', () => { toggleSound(); ui.mSoundV.textContent = audio.muted ? 'Off' : 'On'; });
+  ui.mHelp.addEventListener('click', () => { closeMenu(); openHelp('game'); });
+  ui.mEnd.addEventListener('click', () => { closeMenu(); if (G && !G.over) finishRun(G, null); });
+  for (const b of ui.menu.querySelectorAll('[data-theme]')) b.addEventListener('click', () => applyTheme(b.dataset.theme));
+  function applyTheme(t) {
+    if (t === 'system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+    store.set('tt_theme', t);
+    for (const b of ui.menu.querySelectorAll('[data-theme]')) b.setAttribute('aria-pressed', String(b.dataset.theme === t));
+    ui.footNote.textContent = `Light / Dark: ${t === 'system' ? 'follows system' : t} · Sound ${audio.muted ? 'off' : 'on'}`;
+    themeAt = 0;
+  }
+  function toggleSound() { audio.muted = !audio.muted; store.set('tt_muted', audio.muted ? '1' : '0'); renderSoundBtn(); if (!audio.muted) { unlockAudio(); sfx.place(); } ui.footNote.textContent = ui.footNote.textContent.replace(/Sound (on|off)/, `Sound ${audio.muted ? 'off' : 'on'}`); }
+  function openHelp(from) { helpFrom = from; if (from === 'start') ui.startOv.hidden = true; else if (G) G.modal = 'help'; ui.helpOv.hidden = false; ui.btnHelpClose.focus(); }
   ui.btnPause.addEventListener('click', togglePause);
   ui.btnSpeed1.addEventListener('click', () => setSpeed(1));
   ui.btnSpeed2.addEventListener('click', () => setSpeed(2));
   ui.btnEnd.addEventListener('click', () => { if (G && !G.over) finishRun(G, null); });
-  ui.btnSound.addEventListener('click', () => { audio.muted = !audio.muted; store.set('tt_muted', audio.muted ? '1' : '0'); renderSoundBtn(); if (!audio.muted) { unlockAudio(); sfx.place(); } });
-  ui.btnHelp.addEventListener('click', () => { if (!G || G.modal) return; helpFrom = G.started ? 'game' : 'start'; G.modal = 'help'; ui.helpOv.hidden = false; });
-  ui.btnRules.addEventListener('click', () => { helpFrom = 'start'; ui.startOv.hidden = true; ui.helpOv.hidden = false; });
+  ui.btnSound.addEventListener('click', toggleSound);
+  ui.btnHelp.addEventListener('click', () => { if (!G || G.modal) return; openHelp(G.started ? 'game' : 'start'); });
+  ui.btnRules.addEventListener('click', () => openHelp('start'));
+  ui.btnRules2.addEventListener('click', () => openHelp('start'));
   ui.btnHelpClose.addEventListener('click', () => { ui.helpOv.hidden = true; if (helpFrom === 'start') ui.startOv.hidden = false; if (G && G.modal === 'help') G.modal = null; });
   ui.btnStart.addEventListener('click', () => { unlockAudio(); launch(pick.city, pick.mode, (Math.random() * 1e9) | 0, false); });
   ui.btnDaily.addEventListener('click', () => { unlockAudio(); const s = todaySeed(); launch(dailyCity(s), 'normal', s, true); });
   ui.btnAgain.addEventListener('click', () => { launch(G.city, G.mode, G.daily ? G.seed : (Math.random() * 1e9) | 0, G.daily); });
   ui.btnMenu.addEventListener('click', () => { ui.overOv.hidden = true; ui.startOv.hidden = false; G.started = false; renderStart(); });
-  ui.btnLater.addEventListener('click', () => { nextPlacement(G); flash('Kept in the depot. Tap a token in the tray to place it later.', 4); });
-  ui.btnRemoveLine.addEventListener('click', () => {
-    const line = lineById(G, G.selectedLine); if (!line) return;
-    if (extreme(G)) { refuseExtreme(); return; }
-    const name = LINE_NAMES[line.color]; deleteLine(G, line); renderHud();
-    flash(`${name} line removed. Its train is back in the depot.`, 4);
-  });
+  ui.btnLater.addEventListener('click', () => { nextPlacement(G); toast('Kept in the depot · tap a token to place it later'); });
+  ui.btnRemoveLine.addEventListener('click', removeSelectedLine);
   ui.btnCopy.addEventListener('click', () => {
     const text = `Tiny Transit · ${CITIES[G.city].name} · ${MODES[G.mode].name} · ${seedLabel(G)}: ${G.score} passengers over ${Math.floor(G.day)} days with ${G.stations.length} stations.`;
     const done = () => { ui.btnCopy.textContent = 'Copied'; };
@@ -1153,11 +1420,16 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
   });
 
+  const MINIMAP = {
+    riverside: '<svg viewBox="0 0 150 80" aria-hidden="true"><path d="M-5 44 L40 44 L62 24 L110 24 L130 40 L160 40" fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round"/><path d="M-5 44 L40 44 L62 24 L110 24 L130 40 L160 40" fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round"/><circle cx="30" cy="22" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M84 47 L90 58 L78 58 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="118" y="54" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
+    twinrivers: '<svg viewBox="0 0 150 80" aria-hidden="true"><path d="M-5 26 L50 26 L66 14 L160 14" fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round"/><path d="M-5 26 L50 26 L66 14 L160 14" fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round"/><path d="M-5 58 L60 58 L80 70 L160 70" fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round"/><path d="M-5 58 L60 58 L80 70 L160 70" fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round"/><circle cx="34" cy="42" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M104 36 L110 47 L98 47 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="126" y="38" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
+    drybasin: '<svg viewBox="0 0 150 80" aria-hidden="true"><circle cx="28" cy="26" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M76 20 L82 31 L70 31 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="112" y="24" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><circle cx="56" cy="58" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M124 52 L130 63 L118 63 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="82" y="56" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
+  };
   function renderStart() {
     ui.cityPick.innerHTML = ''; ui.modePick.innerHTML = '';
     for (const [k, c] of Object.entries(CITIES)) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.setAttribute('aria-pressed', String(pick.city === k));
-      b.innerHTML = `<strong>${c.name}</strong><span>${c.desc}</span>`;
+      b.innerHTML = `${MINIMAP[k]}<strong>${c.name}</strong><span>${c.desc}</span>`;
       b.addEventListener('click', () => { pick.city = k; renderStart(); });
       ui.cityPick.appendChild(b);
     }
@@ -1167,30 +1439,48 @@
       b.addEventListener('click', () => { pick.mode = k; renderStart(); });
       ui.modePick.appendChild(b);
     }
+    ui.swrow.innerHTML = LINE_NAMES.map((l, i) => `<span class="sw" style="background:${LINE_CSS[i]}">${l}</span>`).join('');
     const s = todaySeed(), db = parseInt(store.get(`tt_best_daily_${s}`, '0'), 10) || 0;
-    const bestHere = parseInt(store.get(`tt_best_${pick.city}_${pick.mode}`, '0'), 10) || 0;
-    ui.dailyNote.textContent = `Today's daily is ${CITIES[dailyCity(s)].name} in Normal, the same map for everyone${db ? `. Your best today: ${db}` : ''}. ${bestHere ? `Best in ${CITIES[pick.city].name} ${MODES[pick.mode].name}: ${bestHere}.` : ''}`;
+    ui.dailyName.textContent = `${CITIES[dailyCity(s)].name} · Normal`;
+    ui.dailyBest.textContent = `Same map for everyone · your best today ${db}`;
+    ui.btnDaily.textContent = isPhone() ? `Play today's daily · best today ${db}` : "Play today's daily";
+    let pb = null; try { pb = JSON.parse(store.get('tt_pb', 'null')); } catch (e) { pb = null; }
+    ui.pbVal.textContent = pb ? `${pb.score} carried` : '0 carried';
+    ui.pbWhere.textContent = pb ? `${CITIES[pb.city] ? CITIES[pb.city].name : ''} · ${MODES[pb.mode] ? MODES[pb.mode].name : ''} · Week ${pb.week}` : 'No runs yet';
+    ui.pbPhone.textContent = pb ? `Personal best ${pb.score} · ${CITIES[pb.city] ? CITIES[pb.city].name : ''}` : 'No runs yet';
+    ui.btnStart.textContent = isPhone() ? `Start · ${CITIES[pick.city].name} · ${MODES[pick.mode].name}` : 'Start';
   }
 
-  function flash(text, secs) { hintOverride = text; hintUntil = performance.now() + secs * 1000; }
-  function defaultHint(g) {
-    if (g.placing) return 'Tap the target on the map, or keep it in the depot.';
-    if (g.selectedLine) { const l = lineById(g, g.selectedLine); if (!l) return ''; const n = g.trains.filter((t) => t.lineId === l.id).length; return `${LINE_NAMES[l.color]} line · ${l.stations.length} stops · ${n} train${n === 1 ? '' : 's'}. ${extreme(g) ? 'Drag a segment onto a station to add a stop.' : 'Drag a middle stop off the line to bypass it, or a segment onto a station to add one.'}`; }
-    if (!g.lines.length) return 'Passengers want a station of a different shape. Your first train will take them there.';
+  function coachFor(g) {
+    if (g.placing === 'loco') { const lit = g.lines.map((l) => LINE_NAMES[l.color]); return `${lit.length === 1 ? 'Line ' + lit[0] + ' is' : 'Lines ' + lit.slice(0, -1).join(', ') + ' and ' + lit.slice(-1) + ' are'} lit. The locomotive joins where the gap between trains is widest.`; }
+    if (g.placing === 'carriage') return `${g.trains.length === 1 ? 'The train is' : 'All trains are'} lit. A carriage adds 6 seats.`;
+    if (g.placing === 'interchange') return 'Stations are lit. An interchange holds 12 and halves stopping time.';
+    if (g.selectedLine) { const l = lineById(g, g.selectedLine); if (l) return `Line ${LINE_NAMES[l.color]} selected. ${extreme(g) ? 'Drag a cap to extend, or a midpoint onto a station to add a stop.' : 'Drag a cap to extend, a midpoint onto a station to add a stop, a stop away to bypass it.'}`; }
+    if (g.loopCoachLine) { const l = lineById(g, g.loopCoachLine); if (l && l.loop) return `Line ${LINE_NAMES[l.color]} runs as a loop: one way, 25% faster. Long-press a segment to open it.`; g.loopCoachLine = null; }
+    if (!g.everDrew && g.stations.length >= 2) { const p = coachPair(g); return p ? `Drag from the ${p[0].shape} to the ${p[1].shape}.` : 'Drag between two stations to draw a line.'; }
+    if (!g.lines.length) return 'Passengers want a station of a different shape. Your first train takes them there.';
     if (g.trains.length === 0) return 'Your line has no train. The next locomotive arrives on Monday.';
-    const avail = availableColors(g);
-    if (avail.length) return `${LINE_NAMES[avail[0]]} line ready. Drag its pill onto a station, or drag between two stations.`;
-    if (hasRivers(g) && tunnelsAvail(g) === 0) return 'No tunnels left. Route around the river, or pick Tunnels on Monday.';
-    return 'Drag a line\'s end cap to extend it. Drag it back onto the previous stop to retract.';
+    if (hasRivers(g) && tunnelsAvail(g) === 0 && availableColors(g).length === 0) return 'No tunnels left. Route around the river, or pick Tunnels on Monday.';
+    return 'Drag between two stations to draw a line, or drag a ready letter onto a station.';
+  }
+  function coachPair(g) {
+    let bestPair = null, bd = Infinity;
+    for (let i = 0; i < g.stations.length; i++) for (let j = i + 1; j < g.stations.length; j++) {
+      const a = g.stations[i], b = g.stations[j];
+      const d = Math.hypot(a.x - b.x, a.y - b.y) + (pairCrossings(g, a.id, b.id) ? 1000 : 0);
+      if (d < bd) { bd = d; bestPair = [a, b]; }
+    }
+    return bestPair;
   }
   let hudKey = '';
   const TOKEN_SVG = {
-    loco: '<svg viewBox="0 0 32 20" width="30" height="18" aria-hidden="true"><rect x="2" y="3" width="28" height="14" rx="5" fill="currentColor"/><circle cx="10" cy="10" r="2.5" fill="var(--panel-solid)"/><circle cx="17" cy="10" r="2.5" fill="var(--panel-solid)"/><circle cx="24" cy="10" r="2.5" fill="var(--panel-solid)"/></svg>',
-    carriage: '<svg viewBox="0 0 32 20" width="30" height="18" aria-hidden="true"><rect x="2" y="3" width="28" height="14" rx="4" fill="none" stroke="currentColor" stroke-width="2.5"/><line x1="11" y1="3" x2="11" y2="17" stroke="currentColor" stroke-width="2"/><line x1="21" y1="3" x2="21" y2="17" stroke="currentColor" stroke-width="2"/></svg>',
+    loco: '<svg viewBox="0 0 32 20" width="30" height="18" aria-hidden="true"><rect x="2" y="3" width="28" height="14" fill="currentColor"/><circle cx="10" cy="10" r="2.5" fill="var(--bg)"/><circle cx="17" cy="10" r="2.5" fill="var(--bg)"/><circle cx="24" cy="10" r="2.5" fill="var(--bg)"/></svg>',
+    carriage: '<svg viewBox="0 0 32 20" width="30" height="18" aria-hidden="true"><rect x="2" y="3" width="28" height="14" fill="none" stroke="currentColor" stroke-width="2.5"/><line x1="11" y1="3" x2="11" y2="17" stroke="currentColor" stroke-width="2"/><line x1="21" y1="3" x2="21" y2="17" stroke="currentColor" stroke-width="2"/></svg>',
     interchange: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>',
     tunnel: '<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M4 20 V12 a8 8 0 0 1 16 0 V20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M8 20 V13 a4 4 0 0 1 8 0 V20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2"/></svg>',
   };
-  const TOKEN_LABEL = { loco: 'Locomotive', carriage: 'Carriage', interchange: 'Interchange', tunnel: 'Tunnels' };
+  const LOOP_SVG = '<svg class="loopmark" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6 a4 4 0 1 1 4 4" fill="none" stroke="var(--on-line)" stroke-width="1.8"/><path d="M4 10 L6.5 10 L6.5 7.5" fill="none" stroke="var(--on-line)" stroke-width="1.8"/></svg>';
+  const TOKEN_LABEL = { loco: 'Locomotive', carriage: 'Carriage', interchange: 'Interchange' };
   function renderTray(g) {
     ui.pills.innerHTML = '';
     const avail = availableColors(g);
@@ -1200,29 +1490,29 @@
       if (line) {
         const b = document.createElement('button'); b.type = 'button';
         b.className = 'pill drawn' + (g.selectedLine === line.id ? ' selected' : '');
-        b.style.background = LINE_COLORS[i]; b.innerHTML = '<i></i>';
-        b.setAttribute('aria-label', `${LINE_NAMES[i]} line, drawn${g.selectedLine === line.id ? ', selected' : ''}`);
+        b.style.setProperty('--c', LINE_CSS[i]); b.innerHTML = LINE_NAMES[i] + (line.loop ? LOOP_SVG : '');
+        b.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, drawn, ${line.stations.length} stops${line.loop ? ', loop' : ''}${g.selectedLine === line.id ? ', selected' : ''}`);
         b.setAttribute('aria-pressed', String(g.selectedLine === line.id));
-        b.addEventListener('click', () => { if (!interactive()) return; if (g.placing) stopPlacement(g); g.selectedLine = g.selectedLine === line.id ? null : line.id; renderHud(); });
+        b.addEventListener('click', () => { if (!interactive()) return; if (g.placing) stopPlacement(g); selectLine(g.selectedLine === line.id ? null : line.id); });
         ui.pills.appendChild(b);
       } else if (avail.includes(i)) {
         const b = document.createElement('button'); b.type = 'button';
-        b.className = 'pill avail' + (avail[0] === i ? ' next' : '');
-        b.style.setProperty('--c', LINE_COLORS[i]);
-        b.setAttribute('aria-label', `${LINE_NAMES[i]} line, ready to draw`);
+        b.className = 'pill avail'; b.style.setProperty('--c', LINE_CSS[i]); b.textContent = LINE_NAMES[i];
+        b.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, ready to draw`);
         b.addEventListener('pointerdown', (e) => {
           if (!interactive()) return;
           if (g.placing) stopPlacement(g);
-          e.preventDefault(); unlockAudio();
-          g.selectedLine = null; drag = { mode: 'tray', color: i };
+          e.preventDefault(); unlockAudio(); hideRefusal();
+          if (g.selectedLine) selectLine(null);
+          drag = { mode: 'tray', color: i };
           try { b.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or lost pointer */ }
         });
         b.addEventListener('pointermove', (e) => { if (!drag) return; const p = canvasPos(e); onMove(p.x, p.y); });
         b.addEventListener('pointerup', onUp); b.addEventListener('pointercancel', onUp);
         ui.pills.appendChild(b);
       } else {
-        const s = document.createElement('span'); s.className = 'pill locked';
-        s.title = i < g.linesTotal ? `${LINE_NAMES[i]} line` : 'Unlocked in a later week';
+        const s = document.createElement('span'); s.className = 'pill locked'; s.textContent = LINE_NAMES[i];
+        s.setAttribute('role', 'img'); s.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, locked, unlocks on a Monday`);
         ui.pills.appendChild(s);
       }
     }
@@ -1230,47 +1520,57 @@
     const counts = { loco: g.locosAvail, carriage: g.carriagesAvail, interchange: g.interchangesAvail };
     for (const kind of ['loco', 'carriage', 'interchange']) {
       const b = document.createElement('button'); b.type = 'button';
-      b.className = 'token' + (g.placing === kind ? ' active' : '');
-      b.disabled = !counts[kind];
-      b.innerHTML = TOKEN_SVG[kind] + (counts[kind] ? `<span class="n">${counts[kind]}</span>` : '');
-      b.setAttribute('aria-label', `${TOKEN_LABEL[kind]}, ${counts[kind] || 'none'} in depot${g.placing === kind ? ', placing' : ''}`);
-      b.setAttribute('aria-pressed', String(g.placing === kind));
-      b.title = counts[kind] ? PLACE_TEXT[kind] : `No ${TOKEN_LABEL[kind].toLowerCase()} in the depot`;
-      b.addEventListener('click', () => { if (!interactive()) return; if (g.placing === kind) stopPlacement(g); else beginPlacement(g, kind); });
+      const n = counts[kind], active = g.placing === kind;
+      b.className = 'token' + (active ? ' active' : n ? '' : ' empty');
+      b.innerHTML = TOKEN_SVG[kind] + (n && !active ? `<span class="n">${n}</span>` : '');
+      b.setAttribute('aria-label', `${TOKEN_LABEL[kind]}, ${n || 'none'} in depot${active ? ', placing' : n ? ', place' : ''}`);
+      b.setAttribute('aria-pressed', String(active));
+      if (!n) { b.setAttribute('aria-disabled', 'true'); b.tabIndex = -1; }
+      b.title = n ? PLACE_TEXT[kind] : `No ${TOKEN_LABEL[kind].toLowerCase()} in the depot`;
+      b.addEventListener('click', () => { if (!interactive() || !n) return; if (g.placing === kind) stopPlacement(g); else beginPlacement(g, kind); });
       ui.tokens.appendChild(b);
     }
     if (hasRivers(g)) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'token passive'; const n = tunnelsAvail(g);
-      b.innerHTML = TOKEN_SVG.tunnel + (n ? `<span class="n">${n}</span>` : ''); b.disabled = !n;
-      b.setAttribute('aria-label', `Tunnels, ${n} available of ${g.tunnelsTotal}`);
-      b.title = `Tunnels: ${n} of ${g.tunnelsTotal} available. Used automatically when a line crosses the river.`;
-      b.addEventListener('click', () => flash(`${n} of ${g.tunnelsTotal} tunnels free. A line crossing the river uses one; retracting gives it back.`, 4));
-      ui.tokens.appendChild(b);
+      const n = tunnelsAvail(g), d = document.createElement('div');
+      d.className = 'budget' + (n ? '' : ' zero'); d.setAttribute('role', 'status'); d.setAttribute('aria-label', `Tunnels, ${n} of ${g.tunnelsTotal} left`);
+      d.innerHTML = `<span class="lbl">Tunnels</span><span class="sq">${Array.from({ length: g.tunnelsTotal }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span><b>${n}/${g.tunnelsTotal}</b>`;
+      ui.tokens.appendChild(d);
     }
-    ui.btnRemoveLine.hidden = !g.selectedLine || !!g.placing || extreme(g);
-    if (g.selectedLine) { const l = lineById(g, g.selectedLine); if (l) ui.btnRemoveLine.textContent = `Remove ${LINE_NAMES[l.color]} line`; }
+    const sel = lineById(g, g.selectedLine);
+    ui.btnRemoveLine.hidden = !sel || !!g.placing || extreme(g);
+    if (sel) ui.btnRemoveLine.textContent = `Remove line ${LINE_NAMES[sel.color]}`;
   }
   function renderHud() {
     const g = G; if (!g) return;
     ui.score.textContent = g.score;
-    ui.scoreSub.textContent = `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)} · ${CITIES[g.city].name}${g.daily ? ' daily' : g.mode !== 'normal' ? ' ' + MODES[g.mode].name.toLowerCase() : ''}`;
-    const dayIdx = Math.floor(g.day) % 7, frac = g.day - Math.floor(g.day);
-    ui.clock.style.background = `conic-gradient(var(--ink) ${Math.round(frac * 360)}deg, transparent 0deg)`;
-    ui.dayname.textContent = DAYS[dayIdx];
-    ui.weektxt.textContent = g.placing ? `Week ${g.week} · paused` : `Week ${g.week} · day ${Math.floor(g.day) + 1}`;
-    const key = [g.linesAvail, g.linesTotal, g.locosAvail, g.carriagesAvail, g.interchangesAvail, g.tunnelsTotal, g.tunnelsUsed, g.placing, g.selectedLine, g.lines.map((l) => l.color).join(',')].join('|');
+    const modeTxt = g.daily ? 'Daily' : MODES[g.mode].name;
+    ui.scoreSub.textContent = isPhone() ? `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)}` : `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)} · ${CITIES[g.city].name} · ${modeTxt}`;
+    const dayIdx = Math.floor(g.day) % 7, frac = g.day - Math.floor(g.day), paused = pausedNow(g);
+    ui.clock.classList.toggle('paused', paused);
+    ui.clock.style.background = paused ? 'none' : `conic-gradient(var(--ink) ${Math.round(frac * 360)}deg, transparent 0deg)`;
+    ui.dayname.textContent = isPhone() ? DAYS[dayIdx].slice(0, 3) : DAYS[dayIdx];
+    const wk = isPhone() ? (paused ? `W${g.week} · paused` : `W${g.week} · D${Math.floor(g.day) + 1} · ${g.speed}×`) : (paused ? `Week ${g.week} · paused` : `Week ${g.week} · day ${Math.floor(g.day) + 1}`);
+    ui.weektxt.textContent = wk; ui.weektxt.classList.toggle('paused', paused);
+    ui.clockWrap.setAttribute('aria-label', `${DAYS[dayIdx]}, week ${g.week} day ${Math.floor(g.day) + 1}, ${g.speed}× speed, ${Math.round(frac * 100)}% of the day${paused ? ', paused' : ''}`);
+    ui.btnPause.textContent = g.paused ? 'Paused' : 'Pause'; ui.btnPause.classList.toggle('pausedCell', g.paused); ui.btnPause.setAttribute('aria-pressed', String(g.paused));
+    const showFrame = paused && g.started && !g.over;
+    ui.pauseFrame.hidden = !showFrame; ui.pauseTab.hidden = !showFrame;
+    canvas.classList.toggle('dim', showFrame);
+    const key = [g.linesAvail, g.linesTotal, g.locosAvail, g.carriagesAvail, g.interchangesAvail, g.tunnelsTotal, g.tunnelsUsed, g.placing, g.selectedLine, g.lines.map((l) => l.color + (l.loop ? 'o' : '') + l.stations.length).join(',')].join('|');
     if (key !== hudKey) { hudKey = key; renderTray(g); }
-    const now = performance.now();
-    ui.hint.textContent = hintOverride && now < hintUntil ? hintOverride : (g.started ? defaultHint(g) : '');
+    if (g.started) setCoach(coachFor(g));
   }
 
   // ---------- drawing ----------
   function readTheme() {
     const cs = getComputedStyle(document.documentElement);
     const v = (n, d) => cs.getPropertyValue(n).trim() || d;
-    theme = { ink: v('--ink', '#1f1e1b'), bg: v('--bg', '#f4f3ee'), muted: v('--muted', '#6f6c64'), warn: v('--warn', '#d9412b'), river: v('--river', '#cfdfe9'), river2: v('--river2', '#e2edf3') };
-    fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif';
+    const attr = document.documentElement.getAttribute('data-theme');
+    const dark = attr === 'dark' || (attr !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    theme = { dark, ink: v('--ink', '#201e1d'), bg: v('--bg', '#f3f2f2'), muted: v('--muted', '#605d5d'), accent: v('--accent', '#ec3013'), riverBank: v('--river-bank', '#d6dde3'), river: v('--river', '#e3e9ee') };
+    fontFamily = getComputedStyle(document.body).fontFamily || 'Archivo, system-ui, sans-serif';
   }
+  const F = (w, s) => `${w} ${s}px ${fontFamily}`;
   function shapePath(c, shape, x, y, r) {
     c.beginPath();
     const poly = (n, R, rot) => { for (let i = 0; i < n; i++) { const a = rot + (i * 2 * Math.PI) / n; const px = x + R * Math.cos(a), py = y + R * Math.sin(a); i ? c.lineTo(px, py) : c.moveTo(px, py); } c.closePath(); };
@@ -1287,129 +1587,221 @@
   function drawPath(c, pts, color, width, dash, alpha) {
     if (pts.length < 2) return;
     c.save();
-    if (alpha != null) c.globalAlpha = alpha;
+    if (alpha != null) c.globalAlpha *= alpha;
     c.strokeStyle = color; c.lineWidth = width; c.lineJoin = 'round'; c.lineCap = 'round';
     if (dash) c.setLineDash(dash);
     c.beginPath(); c.moveTo(pts[0].x, pts[0].y);
     for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
     c.stroke(); c.restore();
   }
-  function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
-  function label(c, text, x, y) {
-    c.save(); c.font = '500 14px ' + fontFamily;
-    const w = c.measureText(text).width + 24, h = 34;
-    c.fillStyle = theme.ink; roundRect(c, x - w / 2, y - h, w, h, 9); c.fill();
-    c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x, y + 7); c.lineTo(x + 6, y); c.closePath(); c.fill();
-    c.fillStyle = theme.bg; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, x, y - h / 2); c.restore();
+  function textBox(c, text, x, y, fill, color, font, pad, anchor) {
+    c.save(); c.font = font; const w = c.measureText(text).width + pad * 2, h = parseInt(font.match(/(\d+)px/)[1], 10) + pad * 2;
+    const left = anchor === 'left' ? x : anchor === 'right' ? x - w : x - w / 2;
+    c.fillStyle = fill; c.fillRect(left, y - h / 2, w, h);
+    c.fillStyle = color; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(text, left + pad, y + 0.5); c.restore();
+    return { w, h };
   }
+  // Points where a screen-space polyline crosses a river, with the line's direction there.
+  function riverCrossings(g, pts) {
+    const out = [];
+    for (const rv of g.rivers) for (let i = 1; i < pts.length; i++) for (let j = 1; j < rv.length; j++) {
+      const p = pts[i - 1], p2 = pts[i], q = rv[j - 1], q2 = rv[j];
+      const d = (p2.x - p.x) * (q2.y - q.y) - (p2.y - p.y) * (q2.x - q.x); if (!d) continue;
+      const t = ((q.x - p.x) * (q2.y - q.y) - (q.y - p.y) * (q2.x - q.x)) / d, u = ((q.x - p.x) * (p2.y - p.y) - (q.y - p.y) * (p2.x - p.x)) / d;
+      if (t > 0 && t < 1 && u > 0 && u < 1) out.push({ x: p.x + t * (p2.x - p.x), y: p.y + t * (p2.y - p.y), ang: Math.atan2(p2.y - p.y, p2.x - p.x) });
+    }
+    return out;
+  }
+  function tunnelMark(c, cr) {
+    c.save(); c.translate(cr.x, cr.y); c.rotate(cr.ang); c.globalAlpha *= 0.6;
+    c.strokeStyle = theme.ink; c.lineWidth = 2; c.strokeRect(-(CFG.riverWidth + 8) / 2, -14, CFG.riverWidth + 8, 28); c.restore();
+  }
+  function previewLine(c, pts, color, over) {
+    drawPath(c, pts, over ? theme.accent : color, 5, [6, 8], 0.8);
+  }
+  function previewCrossings(c, g, pts, color, budgetLeft) {
+    const crs = riverCrossings(g, pts);
+    crs.forEach((cr, i) => {
+      const over = i + 1 > budgetLeft;
+      c.save(); c.translate(cr.x, cr.y); c.rotate(cr.ang);
+      c.strokeStyle = over ? theme.accent : color; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(-15, -8); c.lineTo(-15, 8); c.moveTo(15, -8); c.lineTo(15, 8); c.moveTo(-15, -8); c.lineTo(-11, -8); c.moveTo(-15, 8); c.lineTo(-11, 8); c.moveTo(15, -8); c.lineTo(11, -8); c.moveTo(15, 8); c.lineTo(11, 8); c.stroke();
+      if (over) { c.strokeStyle = theme.accent; c.lineWidth = 3; c.beginPath(); c.moveTo(-9, -9); c.lineTo(9, 9); c.moveTo(9, -9); c.lineTo(-9, 9); c.stroke(); }
+      c.restore();
+      const left = Math.max(0, budgetLeft - (i + 1));
+      textBox(c, over ? 'No tunnels left' : `−1 tunnel · ${left} left`, cr.x, cr.y - 22, over ? theme.accent : theme.ink, over ? '#ffffff' : theme.bg, F(600, 12), 5, 'center');
+    });
+    return crs.length;
+  }
+  function stationRadius(st) { return CFG.stationR * (st.interchange ? 1.3 : 1) * (hover === st.id && !G.over ? 1.15 : 1); }
 
   function draw() {
     const g = G;
     ctx.clearRect(0, 0, W, H);
-    if (!g) return;
-    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 300);
+    if (!g || !g.started) return;
+    const now = performance.now(), pulse = 0.5 + 0.5 * Math.sin(now / 300);
+    const dimAll = g.over && g.failedStation != null;
+    const failed = dimAll ? stationById(g, g.failedStation) : null;
+    ctx.save(); if (dimAll) ctx.globalAlpha = 0.5;
+    const sel = lineById(g, g.selectedLine);
     // rivers
-    for (const rv of g.rivers) { drawPath(ctx, rv, theme.river, CFG.riverWidth); drawPath(ctx, rv, theme.river2, CFG.riverWidth - 10); }
+    for (const rv of g.rivers) { drawPath(ctx, rv, theme.riverBank, CFG.riverWidth); drawPath(ctx, rv, theme.river, CFG.riverWidth - 10); }
+    // tunnel marks under lines
+    if (hasRivers(g)) for (const line of g.lines) for (const cr of riverCrossings(g, line.path)) tunnelMark(ctx, cr);
     // placement halos
-    if (g.placing === 'loco') for (const line of g.lines) drawPath(ctx, line.path, LINE_COLORS[line.color], 26, null, 0.10 + 0.10 * pulse);
-    if (g.placing === 'interchange') for (const st of g.stations) if (!st.interchange) { ctx.save(); ctx.globalAlpha = 0.12 + 0.12 * pulse; ctx.fillStyle = theme.ink; ctx.beginPath(); ctx.arc(st.x, st.y, 24, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
-    if (g.selectedLine) { const l = lineById(g, g.selectedLine); if (l) drawPath(ctx, l.path, LINE_COLORS[l.color], 22, null, 0.18); }
-    // lines + caps
+    if (g.placing === 'loco') for (const line of g.lines) drawPath(ctx, line.path, LC(line.color), 20 + CFG.lineWidth, null, 0.22);
+    const rot = reducedMotion() ? 0 : (now / 8000) * Math.PI * 2;
+    const dashedTarget = (x, y) => { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.strokeStyle = theme.accent; ctx.lineWidth = 3; ctx.setLineDash([5, 5]); ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); };
+    if (g.placing === 'interchange') for (const st of g.stations) if (!st.interchange) dashedTarget(st.x, st.y);
+    if (sel) drawPath(ctx, sel.path, LC(sel.color), CFG.lineWidth + 18, null, 0.18);
+    // lines, chevrons, caps
     for (const line of g.lines) {
-      drawPath(ctx, line.path, LINE_COLORS[line.color], CFG.lineWidth);
+      const col = LC(line.color);
+      drawPath(ctx, line.path, col, CFG.lineWidth);
+      if (line.loop) {
+        ctx.save(); ctx.globalAlpha *= 0.55; ctx.strokeStyle = theme.bg; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        for (let d = 60; d < line.total; d += 120) { const p = pointAt(line, d); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); ctx.beginPath(); ctx.moveTo(-4, -4); ctx.lineTo(0, 0); ctx.lineTo(-4, 4); ctx.stroke(); ctx.restore(); }
+        ctx.restore();
+      }
+      if (line === sel) continue;
       for (const cap of capPositions(g, line)) {
-        ctx.save(); ctx.strokeStyle = LINE_COLORS[line.color]; ctx.lineCap = 'round';
-        if (hoverCap === line.id + ':' + cap.end) { ctx.globalAlpha = 0.16; ctx.fillStyle = LINE_COLORS[line.color]; ctx.beginPath(); ctx.arc(cap.x, cap.y, 22, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+        ctx.save(); ctx.strokeStyle = col; ctx.lineCap = 'round';
+        if (hoverCap === line.id + ':' + cap.end) { ctx.globalAlpha *= 0.25; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cap.x, cap.y, 22, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha /= 0.25; }
         ctx.lineWidth = CFG.lineWidth; ctx.beginPath(); ctx.moveTo(cap.sx, cap.sy); ctx.lineTo(cap.x, cap.y); ctx.stroke();
         ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(cap.x - cap.uy * 10, cap.y + cap.ux * 10); ctx.lineTo(cap.x + cap.uy * 10, cap.y - cap.ux * 10); ctx.stroke();
         ctx.restore();
       }
     }
-    // first-run coach
-    if (!g.everDrew && g.started && !g.over && !drag && g.stations.length >= 2) {
-      let bestPair = null, bd = Infinity;
-      for (let i = 0; i < g.stations.length; i++) for (let j = i + 1; j < g.stations.length; j++) {
-        const a = g.stations[i], b = g.stations[j];
-        const d = Math.hypot(a.x - b.x, a.y - b.y) + (pairCrossings(g, a.id, b.id) ? 1000 : 0);
-        if (d < bd) { bd = d; bestPair = [a, b]; }
+    // first-run coach line
+    if (!g.everDrew && !g.over && !drag && g.stations.length >= 2) {
+      const pair = coachPair(g);
+      if (pair) {
+        const [a, b] = pair, color = LC(availableColors(g)[0] || 0);
+        ctx.save(); ctx.lineDashOffset = reducedMotion() ? 0 : -now / 40; drawPath(ctx, octiPts({ x: a.x, y: a.y }, { x: b.x, y: b.y }), color, 5, [6, 8], 0.8); ctx.restore();
+        ctx.save(); ctx.globalAlpha *= 0.12 + 0.08 * pulse; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(a.x, a.y, 26, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       }
-      const [a, b] = bestPair;
-      const color = LINE_COLORS[availableColors(g)[0] || 0];
-      ctx.save(); ctx.lineDashOffset = -performance.now() / 40; drawPath(ctx, octiPts({ x: a.x, y: a.y }, { x: b.x, y: b.y }), color, CFG.lineWidth, [2, 18], 0.9); ctx.restore();
-      ctx.save(); ctx.globalAlpha = 0.12 + 0.08 * pulse; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(a.x, a.y, 26, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-      label(ctx, `Drag from the ${a.shape} to the ${b.shape}`, (a.x + b.x) / 2, Math.max(Math.min(a.y, b.y) - 36, PAD.top + 40));
     }
-    // drag preview
+    // drag previews
+    let fadeStop = null;
     if (drag && interactive()) {
-      let from = null, color = theme.muted;
-      if (drag.mode === 'new') { from = stationById(g, drag.from); color = LINE_COLORS[drag.color != null ? drag.color : (availableColors(g)[0] || 0)]; }
-      else if (drag.mode === 'extend' && g.lines.includes(drag.line)) { const s = drag.line.stations; from = stationById(g, drag.end === 'head' ? s[0] : s[s.length - 1]); color = LINE_COLORS[drag.line.color]; }
-      else if (drag.mode === 'insert' && g.lines.includes(drag.line) && Math.hypot(pointer.x - (pressPos ? pressPos.x : pointer.x), pointer.y - (pressPos ? pressPos.y : pointer.y)) > 8) {
-        const N = drag.line.stations.length, a = stationById(g, drag.line.stations[drag.seg]), b = stationById(g, drag.line.stations[(drag.seg + 1) % N]);
-        color = LINE_COLORS[drag.line.color];
-        drawPath(ctx, octiPts({ x: a.x, y: a.y }, pointer), color, CFG.lineWidth, [10, 10]);
-        drawPath(ctx, octiPts(pointer, { x: b.x, y: b.y }), color, CFG.lineWidth, [10, 10]);
-      }
-      else if (drag.mode === 'bypass' && Math.hypot(pointer.x - drag.sx, pointer.y - drag.sy) > 30 && g.lines.includes(drag.line)) {
+      const left = tunnelsAvail(g);
+      if (drag.mode === 'new') {
+        const from = stationById(g, drag.from), color = LC(drag.color != null ? drag.color : (availableColors(g)[0] || 0));
+        const pts = octiPts({ x: from.x, y: from.y }, pointer);
+        const n = riverCrossings(g, pts).length; previewLine(ctx, pts, color, n > left); previewCrossings(ctx, g, pts, color, left);
+      } else if (drag.mode === 'extend' && g.lines.includes(drag.line)) {
+        const s = drag.line.stations, from = stationById(g, drag.end === 'head' ? s[0] : s[s.length - 1]), color = LC(drag.line.color);
+        const pts = octiPts({ x: from.x, y: from.y }, pointer);
+        const n = riverCrossings(g, pts).length; previewLine(ctx, pts, color, n > left); previewCrossings(ctx, g, pts, color, left);
+      } else if (drag.mode === 'insert' && g.lines.includes(drag.line) && (drag.fromHandle || Math.hypot(pointer.x - (pressPos ? pressPos.x : pointer.x), pointer.y - (pressPos ? pressPos.y : pointer.y)) > 8)) {
+        const N = drag.line.stations.length, a = stationById(g, drag.line.stations[drag.seg]), b = stationById(g, drag.line.stations[(drag.seg + 1) % N]), color = LC(drag.line.color);
+        const refund = pairCrossings(g, a.id, b.id), budget = left + refund;
+        const p1 = octiPts({ x: a.x, y: a.y }, pointer), p2 = octiPts(pointer, { x: b.x, y: b.y });
+        const n = riverCrossings(g, p1).length + riverCrossings(g, p2).length, over = n > budget;
+        previewLine(ctx, p1, color, over); previewLine(ctx, p2, color, over);
+        const used = previewCrossings(ctx, g, p1, color, budget); previewCrossings(ctx, g, p2, color, budget - used);
+      } else if (drag.mode === 'bypass' && Math.hypot(pointer.x - drag.sx, pointer.y - drag.sy) > 24 && g.lines.includes(drag.line)) {
         const s = drag.line.stations, i = s.indexOf(drag.sid), N = s.length;
         const a = stationById(g, s[(i - 1 + N) % N]), b = stationById(g, s[(i + 1) % N]);
-        if (a && b) drawPath(ctx, octiPts({ x: a.x, y: a.y }, { x: b.x, y: b.y }), LINE_COLORS[drag.line.color], CFG.lineWidth, [10, 10]);
-      }
-      else if (drag.mode === 'tray') { ctx.save(); ctx.fillStyle = LINE_COLORS[drag.color]; ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(pointer.x, pointer.y, 14, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
-      if (from) drawPath(ctx, octiPts({ x: from.x, y: from.y }, pointer), color, CFG.lineWidth, [10, 10]);
+        if (a && b) { const pts = octiPts({ x: a.x, y: a.y }, { x: b.x, y: b.y }); previewLine(ctx, pts, LC(drag.line.color), riverCrossings(g, pts).length > left + pairCrossings(g, a.id, drag.sid) + pairCrossings(g, drag.sid, b.id)); }
+        fadeStop = drag.sid;
+      } else if (drag.mode === 'tray') { ctx.save(); ctx.fillStyle = LC(drag.color); ctx.fillRect(pointer.x - 14, pointer.y - 14, 28, 28); ctx.fillStyle = theme.dark ? theme.bg : '#ffffff'; ctx.font = F(800, 13); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINE_NAMES[drag.color], pointer.x, pointer.y + 0.5); ctx.restore(); }
     }
     // trains
     for (const tr of g.trains) {
       const line = lineById(g, tr.lineId); if (!line || line.path.length < 2) continue;
-      const glow = g.placing === 'carriage';
+      const col = LC(line.color);
       for (let k = 0; k < tr.cars; k++) {
         let d = tr.dist - tr.dir * 34 * k;
         if (!line.loop) d = Math.max(0, Math.min(line.total, d));
         const p = pointAt(line, d);
-        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang);
-        if (glow) { ctx.globalAlpha = 0.15 + 0.15 * pulse; ctx.fillStyle = LINE_COLORS[line.color]; ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
-        ctx.fillStyle = LINE_COLORS[line.color]; roundRect(ctx, -15, -7, 30, 14, 4); ctx.fill();
-        ctx.strokeStyle = theme.bg; ctx.lineWidth = 1.5; ctx.stroke();
+        if (g.placing === 'carriage') dashedTarget(p.x, p.y);
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); if (tr.dir < 0) ctx.rotate(Math.PI);
+        ctx.fillStyle = col; ctx.fillRect(-15, -7, 30, 14);
+        ctx.strokeStyle = theme.bg; ctx.lineWidth = 1.5; ctx.strokeRect(-15, -7, 30, 14);
+        if (k === 0 || line.loop) { ctx.beginPath(); ctx.moveTo(15, -7); ctx.lineTo(21, 0); ctx.lineTo(15, 7); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+        const load = tr.passengers.slice(k * CFG.trainCap, (k + 1) * CFG.trainCap);
         ctx.fillStyle = theme.bg;
-        tr.passengers.slice(k * CFG.trainCap, (k + 1) * CFG.trainCap).forEach((p2, i) => { shapePath(ctx, p2.d, -8 + (i % 3) * 8, -3 + Math.floor(i / 3) * 6, 2.1); ctx.fill(); });
+        load.forEach((p2, i) => { shapePath(ctx, p2.d, -10 + (i % 3) * 6, -3 + Math.floor(i / 3) * 6, 2.1); ctx.fill(); });
+        ctx.fillRect(-13, 4, 26 * (load.length / CFG.trainCap), 2);
+        ctx.restore();
+      }
+    }
+    // handles on the selected line
+    if (sel && !g.over) {
+      const col = LC(sel.color), onCol = theme.dark ? theme.bg : '#ffffff';
+      for (const h of lineHandles(g, sel)) {
+        const hot = hoverHandle && hoverHandle.kind === h.kind && hoverHandle.x === h.x && hoverHandle.y === h.y;
+        ctx.save();
+        if (hot) { ctx.globalAlpha *= 0.25; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(h.x, h.y, 22, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha /= 0.25; }
+        if (h.kind === 'cap') {
+          ctx.fillStyle = col; ctx.fillRect(h.x - 8, h.y - 8, 16, 16); ctx.strokeStyle = theme.bg; ctx.lineWidth = 2; ctx.strokeRect(h.x - 8, h.y - 8, 16, 16);
+          ctx.fillStyle = onCol; ctx.font = F(800, 10); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(LINE_NAMES[sel.color], h.x, h.y + 0.5);
+        } else if (h.kind === 'mid') {
+          ctx.fillStyle = theme.bg; ctx.fillRect(h.x - 5, h.y - 5, 10, 10); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.strokeRect(h.x - 5, h.y - 5, 10, 10);
+        } else {
+          ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(h.sx, h.sy - CFG.stationR); ctx.lineTo(h.x, h.y + 5); ctx.stroke();
+          ctx.fillStyle = col; ctx.fillRect(h.x - 5, h.y - 5, 10, 10);
+        }
         ctx.restore();
       }
     }
     // stations
     ensureRides(g);
-    for (const st of g.stations) {
-      const r = CFG.stationR * (st.interchange ? 1.3 : 1) * (hover === st.id ? 1.15 : 1);
-      const age = Math.min(1, (g.t - st.born) / 0.5);
-      ctx.save(); ctx.globalAlpha = 0.35 + 0.65 * age;
+    const drawStation = (st) => {
+      const r = stationRadius(st), age = Math.min(1, (g.t - st.born) / 0.5);
+      ctx.save(); ctx.globalAlpha *= 0.35 + 0.65 * age;
+      const base = ctx.globalAlpha;
       const ripple = g.t - st.warnAt;
-      if (ripple >= 0 && ripple < 1.2) { ctx.beginPath(); ctx.strokeStyle = theme.warn; ctx.lineWidth = 2; ctx.globalAlpha = (1 - ripple / 1.2) * 0.6; ctx.arc(st.x, st.y, r + 9 + 34 * ripple, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 0.35 + 0.65 * age; }
-      if (st.over > 0 || g.failedStation === st.id) {
-        const frac = g.failedStation === st.id ? 1 : st.over / CFG.overcrowdLimit;
-        ctx.beginPath(); ctx.strokeStyle = theme.warn; ctx.lineWidth = 3;
-        ctx.arc(st.x, st.y, r + 9, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.globalAlpha *= 0.10 + 0.10 * frac; ctx.fillStyle = theme.warn; ctx.arc(st.x, st.y, r + 9, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 0.35 + 0.65 * age;
+      if (ripple >= 0 && ripple < 0.6 && !reducedMotion()) { ctx.beginPath(); ctx.strokeStyle = theme.accent; ctx.lineWidth = 4 * (1 - ripple / 0.6); ctx.globalAlpha = base * (1 - ripple / 0.6); ctx.arc(st.x, st.y, 24 + 24 * (ripple / 0.6), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = base; }
+      const failedHere = g.failedStation === st.id;
+      if (st.over > 0 || failedHere) {
+        const frac = failedHere ? 1 : st.over / CFG.overcrowdLimit, R = CFG.stationR * (st.interchange ? 1.3 : 1) + 13;
+        ctx.beginPath(); ctx.globalAlpha = base * 0.12; ctx.fillStyle = theme.accent; ctx.arc(st.x, st.y, R, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = base;
+        ctx.beginPath(); ctx.strokeStyle = theme.accent; ctx.lineWidth = 4; ctx.arc(st.x, st.y, R, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2); ctx.stroke();
       }
-      ctx.fillStyle = theme.bg; ctx.strokeStyle = theme.ink; ctx.lineWidth = st.interchange ? 4 : 3;
+      const leaving = g.leavers.find((lv) => lv.sid === st.id);
+      if (leaving) { ctx.save(); ctx.globalAlpha = base * 0.5 * (1 - leaving.t / 0.7); ctx.strokeStyle = theme.ink; ctx.lineWidth = 2; ctx.setLineDash([4, 6]); ctx.beginPath(); ctx.arc(st.x, st.y, r + 13, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+      ctx.fillStyle = theme.bg; ctx.strokeStyle = theme.ink; ctx.lineWidth = 3; ctx.lineJoin = 'round';
       shapePath(ctx, st.shape, st.x, st.y, r); ctx.fill(); ctx.stroke();
-      if (st.interchange) { ctx.lineWidth = 1.5; shapePath(ctx, st.shape, st.x, st.y, r * 0.55); ctx.stroke(); }
-      const x0 = st.x + r + 10, y0 = st.y - 5;
+      if (st.interchange) { ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(st.x, st.y, 5, 0, Math.PI * 2); ctx.stroke(); }
+      const x0 = st.x + r + 16 + 4.5, y0 = st.y - 5, faded = fadeStop === st.id;
+      if (faded) ctx.globalAlpha = base * 0.4;
       st.passengers.forEach((p, i) => {
         const reachable = g.rides[p.d].has(st.id);
-        shapePath(ctx, p.d, x0 + (i % 6) * 9, y0 + Math.floor(i / 6) * 9, 3.2);
-        if (reachable) { ctx.fillStyle = theme.ink; ctx.fill(); } else { ctx.strokeStyle = theme.ink; ctx.lineWidth = 1.2; ctx.stroke(); }
+        shapePath(ctx, p.d, x0 + (i % 6) * 10, y0 + Math.floor(i / 6) * 10, 4);
+        if (reachable) { ctx.fillStyle = theme.ink; ctx.fill(); } else { ctx.save(); ctx.strokeStyle = theme.ink; ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.restore(); }
       });
-      if (st.passengers.length > 8) {
-        const bx = st.x + r + 8, by = st.y - r - 8;
-        ctx.fillStyle = theme.warn; ctx.beginPath(); ctx.arc(bx, by, 10, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#ffffff'; ctx.font = '700 12px ' + fontFamily; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(st.passengers.length), bx, by + 0.5);
+      ctx.globalAlpha = base;
+      if (st.passengers.length >= 8) {
+        const R = CFG.stationR * (st.interchange ? 1.3 : 1) + 13, bx = st.x + R * Math.SQRT1_2, by = st.y - R * Math.SQRT1_2;
+        ctx.fillStyle = theme.accent; ctx.fillRect(bx - 9, by - 9, 18, 18);
+        ctx.fillStyle = '#ffffff'; ctx.font = F(800, 11); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(st.passengers.length), bx, by + 0.5);
       }
       ctx.restore();
-    }
-    // delivery floats
+    };
+    for (const st of g.stations) if (st !== failed) drawStation(st);
+    // leaving passengers (endless)
+    for (const lv of g.leavers) { const k = lv.t / 0.7; ctx.save(); ctx.globalAlpha *= 1 - k; ctx.fillStyle = theme.ink; shapePath(ctx, lv.d, lv.x + 12 * k, lv.y - 12 * k, 4); ctx.fill(); ctx.restore(); }
+    // floats
     for (const f of g.floats) {
-      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - f.t / 1.2) * 0.7; ctx.fillStyle = theme.ink;
-      ctx.font = '600 15px ' + fontFamily; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(f.text, f.x, f.y - 26 * f.t); ctx.restore();
+      const dur = f.kind === 'giveup' ? 1.2 : 0.9, k = Math.min(1, f.t / dur), ease = 1 - (1 - k) * (1 - k);
+      ctx.save(); ctx.globalAlpha *= 1 - k; ctx.fillStyle = f.kind === 'giveup' ? theme.muted : theme.ink;
+      ctx.font = F(800, 14); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(f.text, f.x, f.y - (reducedMotion() ? 0 : (f.kind === 'giveup' ? 40 : 24) * ease)); ctx.restore();
+    }
+    ctx.restore();
+    // failed station at full strength, with a leader to the card
+    if (failed) {
+      drawStation(failed);
+      const phone = isPhone();
+      const cardLeft = failed.x < W / 2, edgeX = cardLeft ? W - 24 - 500 : 24 + 500;
+      ctx.save(); ctx.strokeStyle = theme.accent; ctx.lineWidth = 2; ctx.beginPath();
+      let lx = failed.x, ly = failed.y;
+      if (phone) { ctx.moveTo(failed.x, failed.y + 28); ctx.lineTo(failed.x, H * 0.46 - 6); lx = failed.x; ly = failed.y - 40; }
+      else { const by = Math.max(PAD.top + 24, failed.y - 64); ctx.moveTo(failed.x, failed.y - 28); ctx.lineTo(failed.x, by); ctx.lineTo(edgeX, by); lx = failed.x; ly = by; }
+      ctx.stroke(); ctx.restore();
+      if (g.failLabel) textBox(ctx, g.failLabel, phone ? Math.max(98, Math.min(W - 98, lx)) : (cardLeft ? lx + 8 : lx - 8), ly - (phone ? 0 : 12), theme.accent, '#ffffff', F(600, 12), 6, phone ? 'center' : (cardLeft ? 'left' : 'right'));
     }
   }
 
@@ -1423,28 +1815,20 @@
     if (G) { syncScreen(G); rebuildAll(G); }
   }
   window.addEventListener('resize', resize);
+  window.addEventListener('resize', () => { if (!ui.startOv.hidden) renderStart(); });
 
-  // ---------- rules list ----------
+  // ---------- rules ----------
   const RULES = [
-    ['station', 'Stations appear over time, each with a shape. Passengers appear too, each wanting a station of a different shape. Rare shapes draw crowds from the whole map; a hollow passenger has no route yet.'],
-    ['line', 'Drag from one station to another to draw a line, or drag a colour pill from the tray onto a station. Drag an end cap to extend, back onto the previous stop to retract, or onto the other end to close a loop. Loop trains run one way and faster.'],
-    ['edit', 'Drag a segment onto a station to add a stop in the middle. Select a line from the tray, then drag a middle stop off the line to bypass it.'],
-    ['train', 'Each line gets one train from the depot; a new locomotive joins where the gap is widest. Passengers board only trains heading their way and change lines where lines meet.'],
-    ['river', 'Crossing a river uses a tunnel. Retracting a crossing gives it back. Dry Basin has no river and no tunnels.'],
-    ['crowd', 'A station with more than 6 waiting passengers starts a red ring. When the ring closes, the game ends. Interchanges hold 12 and halve stopping time.'],
-    ['week', 'Every Monday you receive a locomotive and choose one upgrade: a new line, a carriage for a train you pick, an interchange, or two tunnels.'],
+    ['Stations and passengers.', 'Stations appear over time, each with a shape. Passengers want any station of a different shape. Rare shapes draw crowds from the whole map. A dashed glyph has no route yet.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="14" cy="22" r="8"/><path d="M30 12 L36 22 L24 22 Z" stroke-linejoin="round"/><rect x="26" y="28" width="9" height="9" stroke-dasharray="2 2"/></svg>'],
+    ['Draw a line.', 'Drag from one station to another, or drag a ready letter from the tray onto a station. Lines take the next free letter, A to H.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 34 L20 22 L36 22"/><circle cx="8" cy="34" r="4" fill="var(--bg)"/><circle cx="36" cy="22" r="4" fill="var(--bg)"/></svg>'],
+    ['Extend, retract, loop.', 'Tap a line to select it. Drag the lettered end handle to a station to extend, back onto the previous stop to retract, or onto the other end to close a loop. Loop trains run one way, 25% faster; long-press a loop segment to open it.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 22 L26 22"/><rect x="28" y="16" width="12" height="12" fill="currentColor" stroke="none"/><text x="34" y="26" font-size="9" font-weight="800" fill="var(--bg)" text-anchor="middle" font-family="Archivo, system-ui, sans-serif">A</text></svg>'],
+    ['Insert and bypass.', 'On a selected line, drag the small hollow handle at a segment\'s midpoint onto a station to add it as a stop. Drag the handle above a middle stop away from the line to bypass that stop.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 30 L38 30"/><rect x="18" y="26" width="8" height="8" fill="var(--bg)" stroke-width="2"/><path d="M22 26 V14" stroke-width="2"/><rect x="18" y="8" width="8" height="8" fill="currentColor" stroke="none"/></svg>'],
+    ['Trains.', 'Each line gets one train from the depot; new locomotives join where the gap is widest. The nose shows the way it\'s heading; the bar underneath shows how full it is. Passengers board only trains heading their way and change where lines meet.', '<svg viewBox="0 0 44 44" fill="none"><rect x="6" y="15" width="26" height="14" fill="currentColor"/><path d="M32 15 L38 22 L32 29 Z" fill="currentColor"/><rect x="8" y="25" width="14" height="2" fill="var(--bg)"/></svg>'],
+    ['Tunnels.', 'Crossing a river spends one tunnel; the preview shows the cost at the crossing. Retracting a crossing gives it back. The budget sits at the right end of the tray. Dry Basin has no river.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 22 L40 22" stroke-width="10" stroke="var(--river-bank)"/><path d="M22 6 L22 38" stroke-width="3"/><rect x="14" y="12" width="16" height="20" stroke-width="2" opacity="0.6"/></svg>'],
+    ['Crowding.', 'More than 6 waiting (12 at an interchange) starts a red ring. It closes in 40 seconds; when it does, the network shuts down. Anything red on the map needs you now.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3"><circle cx="22" cy="22" r="8"/><path d="M22 6 A16 16 0 0 1 38 22" stroke="var(--accent)" stroke-width="4"/><rect x="30" y="6" width="10" height="10" fill="var(--accent)" stroke="none"/></svg>'],
+    ['Mondays.', 'Every Monday you receive a locomotive and choose one: a new line, a carriage, an interchange, or two tunnels. The map pauses while you decide.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="8" y="10" width="28" height="26"/><path d="M8 18 H36 M16 6 V12 M28 6 V12"/><rect x="14" y="23" width="6" height="6" fill="currentColor" stroke="none"/></svg>'],
   ];
-  const RULE_ICONS = {
-    station: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="6"/></svg>',
-    line: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M4 18 L10 12 L20 12"/></svg>',
-    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h6l4-6 4 6h2"/><circle cx="14" cy="6" r="2" fill="currentColor"/></svg>',
-    train: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="8" width="18" height="8" rx="3"/></svg>',
-    river: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9c3 0 3 2 6 2s3-2 6-2 3 2 6 2M3 15c3 0 3 2 6 2s3-2 6-2 3 2 6 2"/></svg>',
-    crowd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 3 A9 9 0 0 1 21 12"/></svg>',
-    week: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
-  };
-  { const ul = $('rulesList'); for (const [k, t] of RULES) { const li = document.createElement('li'); li.innerHTML = `${RULE_ICONS[k]}<span>${t}</span>`; ul.appendChild(li); } }
-  document.querySelector('.swatches').innerHTML = LINE_COLORS.map((c) => `<i style="background:${c}"></i>`).join('');
+  { const ul = $('rulesList'); for (const [lead, t, ic] of RULES) { const li = document.createElement('li'); li.innerHTML = `${ic}<span><b>${lead}</b> ${t}</span>`; ul.appendChild(li); } }
 
   // ---------- main loop ----------
   const hudEl = $('hud'), bottomEl = $('bottom');
@@ -1452,18 +1836,19 @@
   function frame(now) {
     const raw = Math.min(0.05, (now - last) / 1000); last = now;
     if (now - themeAt > 1000) { readTheme(); themeAt = now; }
-    // keep keyboard focus out of the HUD and tray while a card covers them
     const blocked = overlayOpen();
     if (hudEl.inert !== blocked) { hudEl.inert = blocked; bottomEl.inert = blocked; }
+    const hideChrome = !G || !G.started;
+    if (hudEl.hidden !== hideChrome) { hudEl.hidden = hideChrome; bottomEl.hidden = hideChrome; }
     if (G && G.started && !G.over && !G.paused && !G.modal && !G.placing) tick(G, raw * G.speed);
     if (G) { renderHud(); draw(); }
     requestAnimationFrame(frame);
   }
   function start(data) {
+    applyTheme(store.get('tt_theme', 'system'));
     resize(); readTheme(); renderSoundBtn(); renderStart();
     if (data && data.G && data.G.stations && data.G.city) {
-      G = Object.assign({ floats: [], selectedLine: null, everDrew: true, failedStation: null, dayDelivered: 0, lastDayIdx: 0 }, data.G); G.rides = null; G.linesAt = null;
-      // snapshots from before the reference layout: adopt the current screen as the reference
+      G = Object.assign({ floats: [], leavers: [], selectedLine: null, everDrew: true, failedStation: null, dayDelivered: 0, lastDayIdx: 0 }, data.G); G.rides = null; G.linesAt = null;
       if (!G.ref) { G.ref = { W, H, pb: padBottom(), transpose: false }; for (const st of G.stations) { st.rx = st.x; st.ry = st.y; } G.riversRef = G.rivers || []; }
       if (G.nextStationAt == null) G.nextStationAt = G.t + (G.stationTimer || 0);
       if (G.paxState == null) G.paxState = (G.seed ^ 0x5bd1e995) | 0;
@@ -1471,12 +1856,11 @@
       if (G.best == null) G.best = bestFor(G);
       syncScreen(G); rebuildAll(G);
       ui.startOv.hidden = !!G.started;
-      ui.overOv.hidden = !G.over;
-      ui.btnEnd.hidden = G.mode !== 'zen';
+      if (G.over) finishRun(G, G.failedStation != null ? stationById(G, G.failedStation) : null);
+      ui.btnEnd.hidden = G.mode !== 'zen'; ui.mEnd.hidden = G.mode !== 'zen';
       if (G.modal === 'reward') { if (G.rewardChoices) showReward(G); else offerReward(G); }
       else if (G.modal === 'help') G.modal = null;
       if (G.placing) { ui.bannerText.textContent = PLACE_TEXT[G.placing]; ui.banner.hidden = false; }
-      ui.btnPause.textContent = G.paused ? 'Resume' : 'Pause';
       setSpeed(G.speed || 1);
     } else {
       G = newGame(pick.city, pick.mode, (Math.random() * 1e9) | 0, false);

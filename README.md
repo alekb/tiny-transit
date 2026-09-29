@@ -18,23 +18,23 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 
 ## How to play
 
-- **Draw a line**: drag from one station to another, or drag a colour pill from the tray onto a station and on to a second one.
-- **Extend or retract**: drag a line's end cap to a new station; drag it back onto the previous stop to retract. Drag the cap onto the line's other end to close a loop. Loop trains run one way, never reverse, and go 25% faster. Long-press or right-click a loop segment to open it.
-- **Reroute**: drag a segment onto a station to add a stop in the middle. Select a line from the tray, then drag a middle stop off the line to bypass it.
-- **Manage lines**: tap a drawn pill in the tray to select its line, then **Remove** to return its train to the depot.
-- **Rivers**: every crossing uses a tunnel. Retracting a crossing gives it back. The tray shows how many remain.
+- **Draw a line**: drag from one station to another, or drag a ready letter (A to H) from the tray onto a station and on to a second one.
+- **Select a line**: tap it on the map, tap its letter in the tray, or press its letter key. A selected line shows handles: a lettered square at each end (drag to extend, back onto the previous stop to retract, onto the other end to close a loop), a hollow square at each segment midpoint (drag onto a station to add it as a stop), and a small square above each middle stop (drag it away to bypass that stop). Loop trains run one way and 25% faster; long-press or right-click a loop segment to open it.
+- **Remove a line**: select it and use **Remove line**, or press Delete. Its train goes back to the depot.
+- **Rivers**: every crossing spends a tunnel. The drag preview prices each crossing at the river and turns red when the budget would run out. Retracting a crossing refunds it. The budget sits at the right end of the tray.
 - **Passengers** board only trains heading toward a station that brings them closer, and change lines where lines meet. Rare shapes draw demand from the whole map. A hollow passenger glyph has no route yet.
-- **Crowding**: more than 6 waiting passengers (12 at an interchange) starts a red ring, with a ripple the moment it begins. When the ring closes, the game ends. Interchanges also halve stopping time.
-- **Every Monday** you receive a locomotive and choose one upgrade: a new line, a carriage (+6 seats, tap the train you want it on), an interchange, or two tunnels. A new locomotive joins its line where the gap between trains is widest.
+- **Crowding**: more than 6 waiting passengers (12 at an interchange) starts a red ring, with a ripple the moment it begins and a count badge from 8. When the ring closes, the game ends. Interchanges also halve stopping time. Red on the map always means "needs you now": no line is red.
+- **Every Monday** you receive a locomotive and choose one of three upgrades: a new line, a carriage (+6 seats, tap the train you want it on), an interchange, or two tunnels. A new locomotive joins its line where the gap between trains is widest. The map pauses while you decide and while you place.
 - **Recap**: the end card shows the top line, the busiest station, the longest and average wait, and your best for that city and mode.
 - **Keep in depot** during placement skips just that item and moves on to the next one; tap its token in the tray to place it later.
-- Keys: `Space` pause, `1` / `2` speed, `Esc` cancel placement. Sound can be muted from the top bar.
+- **Messages**: the coach cell in the tray explains what to do next; short toasts confirm what just happened; a red note at the pointer explains a refusal.
+- Keys: `Space` pause, `1` / `2` speed, `Esc` cancel placement or deselect, `A`–`H` select a line, `Delete` remove it. On phones, pause, speed, sound, theme and help live in the menu button.
 
 ## Notes
 
 - Shared segments are drawn side by side; trains follow the offset path.
 - Best scores and the mute setting are kept in `localStorage` (per browser).
-- Light and dark themes follow the system setting.
+- Light and dark themes follow the system setting, or pick one from the phone menu (remembered per browser).
 
 ## License
 
