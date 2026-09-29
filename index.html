@@ -344,7 +344,7 @@
   };
   const netUi = { ov: $('coopOv'), title: $('coopTitle'), text: $('coopText'), status: $('coopStatus'), invite: $('coopInvite'), copyLink: $('btnCopyLink'), back: $('btnCoopBack') };
   // The co-op matchmaking relay (see server/). Deploy it, then put its URL here with wss://. `?relay=` overrides it for a visit.
-  const RELAY_URL = new URLSearchParams(location.search).get('relay') || 'wss://tiny-transit-relay.example.workers.dev';
+  const RELAY_URL = new URLSearchParams(location.search).get('relay') || 'wss://tiny-transit-relay.albey.workers.dev';
 
   let W = 0, H = 0, DPR = 1;
   let G = null;
