@@ -565,8 +565,13 @@
 
   // ---------- player names ----------
   // Display only: names travel over the relay as text and never touch the simulation, so they cannot desync it.
-  const NAME_A = ['Brisk', 'Quiet', 'Night', 'Early', 'Swift', 'Late', 'Rainy', 'Sunny', 'Iron', 'Copper', 'Amber', 'Misty', 'Steady', 'Lucky', 'Rapid', 'Gentle'];
-  const NAME_B = ['Tram', 'Depot', 'Loop', 'Signal', 'Junction', 'Platform', 'Ticket', 'Carriage', 'Tunnel', 'Siding', 'Express', 'Shuttle', 'Terminus', 'Viaduct', 'Crossing', 'Timetable'];
+  // Two words at most 16 characters together, so any pair fits the name limit.
+  const NAME_A = ['Brisk', 'Quiet', 'Night', 'Early', 'Swift', 'Late', 'Rainy', 'Sunny', 'Iron', 'Copper', 'Amber', 'Misty', 'Steady', 'Lucky', 'Rapid', 'Gentle',
+    'Foggy', 'Frosty', 'Dusty', 'Golden', 'Silver', 'Brass', 'Velvet', 'Windy', 'Humble', 'Jolly', 'Merry', 'Nimble', 'Rusty', 'Sleepy',
+    'Snowy', 'Stormy', 'Tidy', 'Urban', 'Weary', 'Zesty', 'Bold', 'Calm', 'Keen', 'Loud', 'Odd', 'Slow', 'Tiny', 'Wild'];
+  const NAME_B = ['Tram', 'Depot', 'Loop', 'Signal', 'Junction', 'Platform', 'Ticket', 'Carriage', 'Tunnel', 'Siding', 'Express', 'Shuttle', 'Terminus', 'Viaduct', 'Crossing', 'Timetable',
+    'Bridge', 'Buffer', 'Cab', 'Coach', 'Conductor', 'Coupler', 'Diesel', 'Driver', 'Engine', 'Ferry', 'Gantry', 'Girder', 'Guard', 'Lantern', 'Lever', 'Metro',
+    'Monorail', 'Points', 'Porter', 'Rail', 'Sleeper', 'Station', 'Steam', 'Switch', 'Tender', 'Track', 'Trolley', 'Turnstile', 'Wagon', 'Whistle', 'Yard'];
   const randomName = () => `${NAME_A[Math.floor(Math.random() * NAME_A.length)]} ${NAME_B[Math.floor(Math.random() * NAME_B.length)]}`;
   const cleanName = (s) => String(s || '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
   let playerName = cleanName(store.get('tt_name', '')) || randomName();
