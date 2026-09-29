@@ -172,6 +172,9 @@
   .opt svg { width: 100%; height: auto; display: block; }
   .opt strong { font: 800 15px var(--font); }
   .opt span { font: 400 12px/1.35 var(--font); color: var(--muted); }
+  .optgrid.modes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .opt.online { border-left: 2px solid var(--ink); }
+  .opt .kicker { font-size: 10px; }
   .swrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .sw { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font: 800 13px var(--font); color: var(--on-line); }
   .caption { font: 400 12px/1.4 var(--font); color: var(--muted); margin: 8px 0 0; }
@@ -232,6 +235,9 @@
   #overOv.side { align-items: stretch; justify-content: flex-start; padding: 64px 24px; }
   #overOv.side.right { justify-content: flex-end; }
   #overOv.side .card { overflow: auto; }
+  .pill.drawn.partner { opacity: 0.55; }
+  .choice:disabled { opacity: 0.5; cursor: default; }
+  .choice:disabled:hover { background: transparent; }
   @media (prefers-reduced-motion: no-preference) {
     .card { animation: cardin 150ms ease-out; }
     @keyframes cardin { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -366,9 +372,9 @@
       </div>
       <div>
         <div class="pick"><span class="lbl">City</span><div class="rule"></div><div class="optgrid" id="cityPick"></div></div>
-        <div class="pick"><span class="lbl">Mode</span><div class="rule"></div><div class="optgrid" id="modePick"></div></div>
+        <div class="pick"><span class="lbl">Mode</span><div class="rule"></div><div class="optgrid modes" id="modePick"></div></div>
         <div class="swrow" id="swrow" aria-hidden="true"></div>
-        <p class="caption">8 lines. Three to start, one more each Monday you choose it.</p>
+        <p class="caption" id="lineCap">8 lines. Three to start, one more each Monday you choose it.</p>
       </div>
     </div>
   </div>
@@ -390,7 +396,16 @@
         <span class="tag">Always</span>
       </div>
       <div class="stack"><span class="lbl">Choose one</span><div class="choices" id="choices" role="radiogroup" aria-label="Choose one upgrade"></div></div>
-      <div class="cardfoot"><span class="muted">The map is paused while you decide.</span><button class="btn primary" id="btnTake" disabled>Take</button></div>
+      <div class="cardfoot"><span class="muted" id="rewardNote">The map is paused while you decide.</span><button class="btn primary" id="btnTake" disabled>Take</button></div>
+    </div>
+  </div>
+
+  <div class="overlay center" id="coopOv" hidden>
+    <div class="card" role="dialog" aria-labelledby="coopTitle">
+      <div class="stack"><div class="kicker">Co-op</div><h2 id="coopTitle">Finding a partner</h2><p class="muted" id="coopText">Two browsers, one city. You each draw four lines; stations, tunnels and the game over are shared.</p></div>
+      <p id="coopStatus" aria-live="polite"></p>
+      <div class="stack" id="coopInvite"><span class="lbl">Or play with a friend</span><p class="muted">Send them this link. Whoever opens it joins you directly, skipping the queue.</p><div><button class="btn secondary" id="btnCopyLink">Copy link</button></div></div>
+      <div class="cardfoot"><button class="btn secondary" id="btnCoopBack">Cancel</button></div>
     </div>
   </div>
 
@@ -429,6 +444,7 @@
   const CFG = {
     dayLength: 20, stationCap: 6, interchangeCap: 12, trainCap: 6, trainSpeed: 100, loopBoost: 1.25, dwell: 0.7, interchangeDwell: 0.35,
     overcrowdLimit: 40, stationR: 11, lineWidth: 8, lineGap: 10, capLen: 28, maxLines: 8, startLines: 3, riverWidth: 34, riverClear: 40,
+    coopStartLines: 2, coopMaxLines: 4,
   };
   const CITIES = {
     riverside: { name: 'Riverside', desc: 'One river. 3 tunnels.', short: '1 river · 3 tunnels', rivers: 1, tunnels: 3, stationRate: 1, passengerRate: 1 },
@@ -439,12 +455,15 @@
     normal: { name: 'Normal', desc: 'A crowded station ends the run.' },
     zen: { name: 'Endless', desc: 'No game over. Overflow gives up and leaves.' },
     extreme: { name: 'Extreme', desc: 'Lines only grow. No retract, remove, bypass or open.' },
+    coop: { name: 'Co-op', desc: 'Two players, one city. Four lines each.', online: true },
   };
   const PAD = { top: 84, side: 24 };
   const padBottomFor = (w) => (w < 720 ? 190 : 130);
   const padBottom = () => padBottomFor(W);
   const REF = { W: 1280, H: 800 };
   const isPhone = () => W < 720;
+  // Fixed-step simulation. Co-op groups steps into lockstep turns; solo runs the same steps straight from the clock.
+  const STEP = 1 / 60, STEPS_PER_TURN = 6, TURN_MS = 100, INPUT_DELAY = 2, SYNC_EVERY = 20;
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
@@ -462,8 +481,11 @@
     btnPause: $('btnPause'), btnSpeed1: $('btnSpeed1'), btnSpeed2: $('btnSpeed2'), btnEnd: $('btnEnd'), btnSound: $('btnSound'), btnHelp: $('btnHelp'),
     menuBtn: $('menuBtn'), menu: $('menu'), menuCity: $('menuCity'), mPause: $('mPause'), mSpeed1: $('mSpeed1'), mSpeed2: $('mSpeed2'), mSound: $('mSound'), mSoundV: $('mSoundV'), mHelp: $('mHelp'), mEnd: $('mEnd'),
     btnStart: $('btnStart'), btnDaily: $('btnDaily'), btnRules: $('btnRules'), btnRules2: $('btnRules2'), btnAgain: $('btnAgain'), btnMenu: $('btnMenu'), btnCopy: $('btnCopy'),
-    btnHelpClose: $('btnHelpClose'), btnLater: $('btnLater'),
+    btnHelpClose: $('btnHelpClose'), btnLater: $('btnLater'), rewardNote: $('rewardNote'), lineCap: $('lineCap'),
   };
+  const netUi = { ov: $('coopOv'), title: $('coopTitle'), text: $('coopText'), status: $('coopStatus'), invite: $('coopInvite'), copyLink: $('btnCopyLink'), back: $('btnCoopBack') };
+  // The co-op matchmaking relay (see server/). Deploy it, then put its URL here with wss://. `?relay=` overrides it for a visit.
+  const RELAY_URL = new URLSearchParams(location.search).get('relay') || 'wss://tiny-transit-relay.albey.workers.dev';
 
   let W = 0, H = 0, DPR = 1;
   let G = null;
@@ -482,6 +504,8 @@
   let rewardPick = null;
   let loopCoached = false;
   const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let me = 0;        // local player index: 0 in solo and for the co-op host, 1 for the guest
+  let net = null;    // co-op connection and lockstep state; null in solo
 
   // ---------- messaging layers: coach (persistent), toast (2.4s), refusal (anchored) ----------
   function setCoach(text) {
@@ -516,7 +540,6 @@
   }
   function hideRefusal() { clearTimeout(refusalTimer); ui.refusal.hidden = true; }
   function announce(text, assertive) { const el = assertive ? ui.srAssertive : ui.srPolite; el.textContent = ''; setTimeout(() => { el.textContent = text; }, 30); }
-  const flash = (text) => toast(text);
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) { /* storage unavailable */ } },
@@ -569,13 +592,17 @@
 
   // ---------- state ----------
   function newGame(city, mode, seed, daily) {
+    const coop = mode === 'coop', fixed = !!daily || coop;
     // Stations and rivers live in `ref` coordinates (rx/ry, riversRef); x/y and rivers are their on-screen projection.
-    const ref = daily ? { W: REF.W, H: REF.H, pb: padBottomFor(REF.W), transpose: W < H } : { W, H, pb: padBottom(), transpose: false };
+    // The daily and co-op use a fixed reference layout so every screen (and both peers) gets the same map.
+    const ref = fixed ? { W: REF.W, H: REF.H, pb: padBottomFor(REF.W), transpose: W < H } : { W, H, pb: padBottom(), transpose: false };
+    const startLines = coop ? CFG.coopStartLines : CFG.startLines;
+    const mkDepot = () => ({ linesAvail: startLines, linesTotal: startLines, locosAvail: startLines, carriagesAvail: 0, interchangesAvail: 0 });
     const g = {
-      city, mode, seed, daily: !!daily, rngState: seed | 0, paxState: (seed ^ 0x5bd1e995) | 0, rewardState: (seed ^ 0x27d4eb2d) | 0, ref,
-      t: 0, day: 0, week: 1, score: 0, dayDelivered: 0, lastDayIdx: 0, over: false, paused: false, speed: 1, started: false,
+      city, mode, seed, daily: !!daily, coop, fixed, rngState: seed | 0, paxState: (seed ^ 0x5bd1e995) | 0, rewardState: (seed ^ 0x27d4eb2d) | 0, ref,
+      t: 0, day: 0, week: 1, score: 0, dayDelivered: 0, lastDayIdx: 0, over: false, paused: false, speed: 1, started: false, rev: 0,
       stations: [], lines: [], trains: [], floats: [], leavers: [], rivers: [], riversRef: [], nextId: 1,
-      linesAvail: CFG.startLines, linesTotal: CFG.startLines, locosAvail: CFG.startLines, carriagesAvail: 0, interchangesAvail: 0,
+      depots: coop ? [mkDepot(), mkDepot()] : [mkDepot()],
       tunnelsTotal: CITIES[city].tunnels, tunnelsUsed: 0,
       spawnAcc: 0, nextStationAt: 0, rareUsed: [], placing: null, placeQueue: [], modal: null, rewardChoices: null,
       selectedLine: null, everDrew: false, failedStation: null,
@@ -605,7 +632,15 @@
   const capOf = (st) => (st.interchange ? CFG.interchangeCap : CFG.stationCap);
   const hasRivers = (g) => g.riversRef.length > 0;
   const tunnelsAvail = (g) => g.tunnelsTotal - g.tunnelsUsed;
-  function bump(g) { g.rides = null; }
+  function bump(g) { g.rides = null; g.rev++; }
+  const depot = (g, p = me) => g.depots[p];
+  // Letters a player may draw: all eight solo; in co-op the host has A–D and the guest E–H.
+  const colorsOf = (g, p) => LINE_NAMES.map((_, i) => i).filter((i) => !g.coop || (i < 4) === (p === 0));
+  const maxLinesFor = (g) => (g.coop ? CFG.coopMaxLines : CFG.maxLines);
+  const rewardPicker = (g) => (g.coop ? (g.week % 2 === 0 ? 0 : 1) : 0);
+  const myLines = (g) => g.lines.filter((l) => l.owner === me);
+  const myTrains = (g) => g.trains.filter((t) => { const l = lineById(g, t.lineId); return l && l.owner === me; });
+  function carriedBy(g, p) { let n = 0; for (const c of colorsOf(g, p)) n += g.stats.byLine[c] || 0; return n; }
 
   function ensureRides(g) {
     if (g.rides) return;
@@ -702,7 +737,7 @@
       if (g.stations.some((s) => Math.hypot(s.rx - x, s.ry - y) < minD)) continue;
       if (nearRiver(g, x, y, CFG.riverClear)) continue;
       // steering clear of drawn lines depends on the player, so the daily skips it
-      if (!g.daily && i < 90) { const sp = toScreen(g, { x, y }); if (nearAnyLine(g, sp.x, sp.y, 30)) continue; }
+      if (!g.fixed && i < 90) { const sp = toScreen(g, { x, y }); if (nearAnyLine(g, sp.x, sp.y, 30)) continue; }
       return { x, y };
     }
     return null;
@@ -840,33 +875,34 @@
   }
 
   // ---------- lines ----------
-  function availableColors(g) {
+  function availableColors(g, p = me) {
     const used = new Set(g.lines.map((l) => l.color));
-    return LINE_NAMES.map((_, i) => i).filter((i) => !used.has(i)).slice(0, Math.max(0, g.linesAvail));
+    return colorsOf(g, p).filter((i) => !used.has(i)).slice(0, Math.max(0, depot(g, p).linesAvail));
   }
-  function createLine(g, a, b, color) {
-    const avail = availableColors(g);
+  function createLine(g, a, b, color, p = me) {
+    const avail = availableColors(g, p), d = depot(g, p);
     if (color == null || !avail.includes(color)) color = avail[0];
     if (color == null) return null;
-    if (!tunnelsFit(g, [[a, b]])) { refuseTunnel(); return null; }
-    const line = { id: uid(g), color, stations: [a, b], loop: false, path: [], cum: [], sIdx: [], stationDist: [], total: 0 };
-    g.lines.push(line); g.linesAvail--; g.everDrew = true;
+    if (!tunnelsFit(g, [[a, b]])) { if (p === me) refuseTunnel(); return null; }
+    const line = { id: uid(g), color, owner: p, stations: [a, b], loop: false, path: [], cum: [], sIdx: [], stationDist: [], total: 0 };
+    g.lines.push(line); d.linesAvail--; g.everDrew = true;
     rebuildAll(g); bump(g);
-    if (g.locosAvail > 0) addTrain(g, line);
-    else toast(`Line ${LINE_NAMES[color]} has no train yet · next locomotive on Monday`, color);
+    if (d.locosAvail > 0) addTrain(g, line);
+    else if (p === me) toast(`Line ${LINE_NAMES[color]} has no train yet · next locomotive on Monday`, color);
     return line;
   }
   function deleteLine(g, line) {
+    const d = depot(g, line.owner);
     for (const tr of g.trains.filter((t) => t.lineId === line.id)) {
       const loc = locate(line, tr);
       const st = stationById(g, loc ? loc.from : line.stations[0]);
       if (st) st.passengers.push(...tr.passengers);
-      g.locosAvail++; g.carriagesAvail += tr.cars - 1;
+      d.locosAvail++; d.carriagesAvail += tr.cars - 1;
     }
     g.trains = g.trains.filter((t) => t.lineId !== line.id);
     g.lines = g.lines.filter((l) => l !== line);
     if (g.selectedLine === line.id) g.selectedLine = null;
-    g.linesAvail++; rebuildAll(g); bump(g);
+    d.linesAvail++; rebuildAll(g); bump(g);
   }
   const extreme = (g) => g.mode === 'extreme';
   function refuseExtreme() { refuse('Extreme: lines only grow'); }
@@ -889,7 +925,7 @@
       }
     }
     const tr = { id: uid(g), lineId: line.id, dist, dir, cars: 1, passengers: [], dwell: 0, nextStop: 1 };
-    g.trains.push(tr); g.locosAvail--;
+    g.trains.push(tr); depot(g, line.owner).locosAvail--;
     setNextStop(line, tr);
   }
   function setNextStop(line, tr) {
@@ -993,8 +1029,8 @@
     g.floats.push({ x: st.x, y: st.y - 30, t: 0, text: `−${gone.length} gave up`, kind: 'giveup' });
     announce(`${gone.length} passengers gave up at the ${st.shape} station`, false);
   }
-  function finishRun(g, st) {
-    g.over = true; g.failedStation = st ? st.id : null; g.placing = null; g.placeQueue = []; g.selectedLine = null; ui.banner.hidden = true; closeMenu();
+  function finishRun(g, st, reason) {
+    g.over = true; g.failedStation = st ? st.id : null; g.placing = null; g.placeQueue = []; g.selectedLine = null; drag = null; ui.banner.hidden = true; ui.rewardOv.hidden = true; closeMenu();
     ensureRides(g);
     const dayName = DAYS[Math.floor(g.day) % 7];
     const when = `${isPhone() ? dayName.slice(0, 3) : dayName}, week ${g.week}`;
@@ -1010,6 +1046,12 @@
       ui.overTip.textContent = lines.length ? 'An interchange where two lines meet keeps a busy station breathing. A second locomotive on the line that loops back helps too.' : 'A station with no line fills fast. Drag the nearest cap to it as soon as it appears — the coach will point at it.';
       g.failLabel = `${cap1(st.shape)} · ${lines.length ? 'line ' + lines.map((l) => LINE_NAMES[l.color]).join(', ') : 'no line'} · ${st.passengers.length} waiting`;
       sfx.over(); announce(`Network closed. The ${st.shape} station was crowded for too long.`, true);
+    } else if (reason === 'lost') {
+      ui.overEyebrow.textContent = `Connection lost · ${when}`;
+      ui.overTitle.textContent = 'Your partner dropped off the map';
+      ui.overSub.textContent = 'The network kept running until the link went quiet.';
+      ui.overTip.textContent = 'Play again to find a new partner, or send a friend the invite link.';
+      g.failLabel = null; announce('Connection lost. Your partner left the game.', true);
     } else {
       ui.overEyebrow.textContent = `Run ended · ${when}`;
       ui.overTitle.textContent = 'You closed the network on your own terms';
@@ -1033,6 +1075,7 @@
     } else rows.push(['Longest wait', 'no passenger reached a station']);
     const topLine = Object.entries(g.stats.byLine).sort((a, b) => b[1] - a[1])[0];
     if (topLine) rows.push(['Top line', `${LINE_NAMES[topLine[0]]} · ${topLine[1]} carried`]);
+    if (g.coop) rows.push(['Carried', `you ${carriedBy(g, me)} · partner ${carriedBy(g, 1 - me)}`]);
     ui.overRecap.innerHTML = rows.map(([k, v]) => `<li><span>${k}</span><span>${v}</span></li>`).join('');
     ui.btnCopy.textContent = 'Copy score';
     // dock the card away from the failed station; phone: bottom sheet
@@ -1043,16 +1086,16 @@
 
   // ---------- weekly reward ----------
   const rewardDefs = (g) => ({
-    line: { t: `Line ${LINE_NAMES[nextLetter(g)]}`, d: 'A new colour in the tray, with its own train.', ic: `<span class="ic sw" style="background:${LINE_CSS[nextLetter(g)]}">${LINE_NAMES[nextLetter(g)]}</span>` },
+    line: { t: `Line ${LINE_NAMES[nextLetter(g, rewardPicker(g))]}`, d: 'A new colour in the tray, with its own train.', ic: `<span class="ic sw" style="background:${LINE_CSS[nextLetter(g, rewardPicker(g))]}">${LINE_NAMES[nextLetter(g, rewardPicker(g))]}</span>` },
     carriage: { t: 'Carriage', d: 'Adds 6 seats to the train you tap.', ic: `<span class="ic">${TOKEN_SVG.carriage}</span>` },
     interchange: { t: 'Interchange', d: 'One station holds 12 instead of 6, and trains stop there in half the time.', ic: `<span class="ic">${TOKEN_SVG.interchange}</span>` },
     tunnel: { t: 'Tunnels ×2', d: `Two more river crossings. Budget goes ${tunnelsAvail(g)}/${g.tunnelsTotal} → ${tunnelsAvail(g) + 2}/${g.tunnelsTotal + 2}.`, ic: `<span class="ic">${TOKEN_SVG.tunnel}</span>` },
   });
-  function nextLetter(g) { const used = new Set(g.lines.map((l) => l.color)); for (let i = 0; i < CFG.maxLines; i++) if (!used.has(i)) return i; return 0; }
+  function nextLetter(g, p = me) { const used = new Set(g.lines.map((l) => l.color)), mine = colorsOf(g, p); return mine.find((i) => !used.has(i)) ?? mine[0]; }
   function offerReward(g) {
     g.modal = 'reward'; g.selectedLine = null; sfx.week();
     const pool = [];
-    if (g.linesTotal < CFG.maxLines) pool.push('line');
+    if (depot(g, rewardPicker(g)).linesTotal < maxLinesFor(g)) pool.push('line');
     pool.push('carriage', 'interchange');
     if (hasRivers(g)) pool.push('tunnel');
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng(g, 'rewardState') * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
@@ -1060,12 +1103,15 @@
     showReward(g);
   }
   function showReward(g) {
-    const defs = rewardDefs(g);
-    ui.rewardEyebrow.textContent = `Monday · Week ${g.week - 1} complete`;
+    const defs = rewardDefs(g), mine = rewardPicker(g) === me;
+    ui.rewardEyebrow.textContent = `Monday · Week ${g.week - 1} complete${g.coop ? (mine ? ' · your pick' : ' · your partner picks') : ''}`;
+    ui.rewardNote.textContent = !g.coop ? 'The map is paused while you decide.'
+      : mine ? 'You both get a locomotive; the upgrade goes to your depot.'
+      : 'You both get a locomotive. Your partner is choosing this week\'s upgrade.';
     ui.choices.innerHTML = ''; rewardPick = null;
     for (const k of g.rewardChoices) {
       const c = defs[k], b = document.createElement('button');
-      b.className = 'choice'; b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false'); b.setAttribute('aria-pressed', 'false');
+      b.className = 'choice'; b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', 'false'); b.setAttribute('aria-pressed', 'false'); b.disabled = !mine;
       b.innerHTML = `${c.ic}<strong>${c.t}</strong><span>${c.d}</span>`;
       b.addEventListener('click', () => {
         rewardPick = k;
@@ -1074,30 +1120,37 @@
       });
       ui.choices.appendChild(b);
     }
-    ui.btnTake.disabled = true; ui.btnTake.textContent = 'Take';
+    ui.btnTake.disabled = true; ui.btnTake.textContent = 'Take'; ui.btnTake.hidden = !mine;
     ui.rewardOv.hidden = false; closeMenu();
-    announce(`Monday. Choose one upgrade: ${g.rewardChoices.map((k) => defs[k].t).join(', ')}`, false);
+    announce(mine ? `Monday. Choose one upgrade: ${g.rewardChoices.map((k) => defs[k].t).join(', ')}` : 'Monday. Your partner is choosing this week\'s upgrade.', false);
   }
-  ui.btnTake.addEventListener('click', () => { if (G && rewardPick) chooseReward(G, rewardPick); });
-  function chooseReward(g, k) {
+  ui.btnTake.addEventListener('click', () => { if (G && rewardPick) { ui.btnTake.disabled = true; issue({ k: 'reward', choice: rewardPick }); } });
+  // Shared effect of a reward pick by player p, then the local follow-up: prompt for whatever landed in this player's depot.
+  function chooseReward(g, k, p) {
     ui.rewardOv.hidden = true; g.modal = null; g.rewardChoices = null; rewardPick = null;
-    g.locosAvail++;
+    for (const d of g.depots) d.locosAvail++;
+    const d = depot(g, p);
+    if (k === 'line') { d.linesAvail++; d.linesTotal++; }
+    if (k === 'carriage') d.carriagesAvail++;
+    if (k === 'interchange') d.interchangesAvail++;
+    if (k === 'tunnel') g.tunnelsTotal += 2;
     g.placeQueue.push('loco');
-    if (k === 'line') { const li = nextLetter(g); g.linesAvail++; g.linesTotal++; toast(`Line ${LINE_NAMES[li]} ready`, li); }
-    if (k === 'carriage') { g.carriagesAvail++; g.placeQueue.push('carriage'); }
-    if (k === 'interchange') { g.interchangesAvail++; g.placeQueue.push('interchange'); }
-    if (k === 'tunnel') { g.tunnelsTotal += 2; toast(`Tunnels +2 · ${tunnelsAvail(g)}/${g.tunnelsTotal}`); }
+    if (p === me) {
+      if (k === 'line') { const li = nextLetter(g, p); toast(`Line ${LINE_NAMES[li]} ready`, li); }
+      if (k === 'tunnel') toast(`Tunnels +2 · ${tunnelsAvail(g)}/${g.tunnelsTotal}`);
+      if (k === 'carriage' || k === 'interchange') g.placeQueue.push(k);
+    } else toast(`Your partner chose ${{ line: 'a new line', carriage: 'a carriage', interchange: 'an interchange', tunnel: 'two tunnels' }[k]} · your locomotive is in the depot`);
     nextPlacement(g);
   }
   const PLACE_TEXT = { loco: 'Placing a locomotive — tap a line on the map', carriage: 'Placing a carriage — tap a train', interchange: 'Placing an interchange — tap a station' };
   function nextPlacement(g) {
-    const avail = { loco: g.locosAvail, carriage: g.carriagesAvail, interchange: g.interchangesAvail };
+    const d = depot(g), avail = { loco: d.locosAvail, carriage: d.carriagesAvail, interchange: d.interchangesAvail };
     g.placing = null;
     while (g.placeQueue.length) {
       const k = g.placeQueue.shift();
       if (!avail[k]) continue;
-      if (k === 'loco' && !g.lines.length) { toast('Locomotive waits in the depot until you draw a line'); continue; }
-      if (k === 'carriage' && !g.trains.length) { toast('Carriage waits in the depot until a train is running'); continue; }
+      if (k === 'loco' && !myLines(g).length) { toast('Locomotive waits in the depot until you draw a line'); continue; }
+      if (k === 'carriage' && !myTrains(g).length) { toast(g.coop ? 'Carriage waits in the depot until one of your trains is running' : 'Carriage waits in the depot until a train is running'); continue; }
       g.placing = k; break;
     }
     if (!g.placing) { ui.banner.hidden = true; renderHud(); return; }
@@ -1113,29 +1166,128 @@
       const st = hitStation(g, x, y);
       if (!st) { refuse('Tap a station'); return; }
       if (st.interchange) { refuse('Already an interchange'); return; }
-      st.interchange = true; g.interchangesAvail--; sfx.place();
-      toast(`The ${st.shape} is now an interchange`);
-      nextPlacement(g); return;
+      issue({ k: 'interchange', sid: st.id }); nextPlacement(g); return;
     }
     if (kind === 'carriage') {
       let tr = hitTrain(g, x, y);
       if (!tr) {
         const h = hitLine(g, x, y);
-        if (h) { const trains = g.trains.filter((t) => t.lineId === h.line.id); trains.sort((a, b) => b.passengers.length / b.cars - a.passengers.length / a.cars || a.cars - b.cars); tr = trains[0] || null; }
+        if (h && h.line.owner === me) { const trains = g.trains.filter((t) => t.lineId === h.line.id); trains.sort((a, b) => b.passengers.length / b.cars - a.passengers.length / a.cars || a.cars - b.cars); tr = trains[0] || null; }
       }
       if (!tr) { refuse('Tap a train', 'Or its line, for the fullest train'); return; }
-      tr.cars++; g.carriagesAvail--; sfx.place();
-      const li = lineById(g, tr.lineId).color;
-      toast(`Carriage attached on line ${LINE_NAMES[li]} · ${tr.cars} cars`, li);
-      nextPlacement(g); return;
+      if (lineById(g, tr.lineId).owner !== me) { refuse('That is your partner\'s train', 'Carriages go on your own lines'); return; }
+      issue({ k: 'carriage', train: tr.id }); nextPlacement(g); return;
     }
     let line = null;
     const st = hitStation(g, x, y);
-    if (st) { ensureRides(g); const ls = g.linesAt.get(st.id) || []; if (ls.length === 1) line = ls[0]; else if (ls.length > 1) { refuse('Several lines stop here', 'Tap the line itself'); return; } }
+    if (st) { ensureRides(g); const ls = (g.linesAt.get(st.id) || []).filter((l) => l.owner === me); if (ls.length === 1) line = ls[0]; else if (ls.length > 1) { refuse('Several lines stop here', 'Tap the line itself'); return; } }
     if (!line) { const h = hitLine(g, x, y); if (h) line = h.line; }
     if (!line) { refuse('Tap a line'); return; }
-    addTrain(g, line); sfx.place(); toast(`Locomotive added to line ${LINE_NAMES[line.color]}`, line.color);
-    nextPlacement(g);
+    if (line.owner !== me) { refuse('That is your partner\'s line', 'Locomotives go on your own lines'); return; }
+    issue({ k: 'loco', line: line.id }); nextPlacement(g);
+  }
+
+  // ---------- commands ----------
+  // Every edit to shared state is a command applied through apply(), so both co-op peers make the same change in the
+  // same order. Solo play applies at once; co-op queues it for the lockstep turn it belongs to. apply() re-validates
+  // everything, so a stale or hostile command is simply ignored on both sides. Toasts and refusals only fire for the
+  // local player's own commands.
+  function issue(c) { if (!G) return false; if (net) { net.queued.push(c); return true; } return apply(G, c, 0); }
+  function apply(g, c, p) {
+    if (g.over || !g.depots[p] || !c) return false;
+    const d = g.depots[p], line = c.line != null ? lineById(g, c.line) : null;
+    const own = !!line && line.owner === p, N = line ? line.stations.length : 0, local = p === me;
+    switch (c.k) {
+      case 'create':
+        if (c.a === c.b || !stationById(g, c.a) || !stationById(g, c.b)) return false;
+        return !!createLine(g, c.a, c.b, c.color, p);
+      case 'extend': {
+        if (!own || line.loop || line.stations.includes(c.sid) || !stationById(g, c.sid)) return false;
+        const endSid = c.end === 'head' ? line.stations[0] : line.stations[N - 1];
+        if (!tunnelsFit(g, [[endSid, c.sid]])) { if (local) refuseTunnel(); return false; }
+        if (c.end === 'head') line.stations.unshift(c.sid); else line.stations.push(c.sid);
+        rebuildAll(g); bump(g); return true;
+      }
+      case 'retract': {
+        if (!own || line.loop || extreme(g)) return false;
+        if (N <= 2) { deleteLine(g, line); return true; }
+        const endIdx = c.end === 'head' ? 0 : N - 1;
+        const refund = pairCrossings(g, line.stations[endIdx], line.stations[c.end === 'head' ? 1 : N - 2]);
+        line.stations.splice(endIdx, 1); rebuildAll(g); bump(g);
+        if (local && refund) toast(`Tunnel refunded · ${tunnelsAvail(g)}/${g.tunnelsTotal}`);
+        return true;
+      }
+      case 'loop':
+        if (!own || line.loop || N < 3) return false;
+        if (!tunnelsFit(g, [[line.stations[0], line.stations[N - 1]]])) { if (local) refuseTunnel(); return false; }
+        line.loop = true; rebuildAll(g); bump(g);
+        if (local) { toast(`Loop closed on line ${LINE_NAMES[line.color]} · trains run one way`, line.color); if (!loopCoached) { loopCoached = true; g.loopCoachLine = line.id; } }
+        return true;
+      case 'unloop': {
+        if (!own || !line.loop || extreme(g) || !(c.seg >= 0 && c.seg < N)) return false;
+        const st = line.stations; line.stations = [...st.slice(c.seg + 1), ...st.slice(0, c.seg + 1)];
+        line.loop = false; rebuildAll(g); bump(g);
+        if (local) toast(`Loop opened on line ${LINE_NAMES[line.color]}`, line.color);
+        return true;
+      }
+      case 'insert': {
+        const st = stationById(g, c.sid);
+        if (!own || !st || line.stations.includes(c.sid) || !(c.seg >= 0 && c.seg < (line.loop ? N : N - 1))) return false;
+        const a = line.stations[c.seg], b = line.stations[(c.seg + 1) % N];
+        if (!tunnelsFit(g, [[a, c.sid], [c.sid, b]], [[a, b]])) { if (local) refuseTunnel(); return false; }
+        line.stations.splice(c.seg + 1, 0, c.sid); rebuildAll(g); bump(g);
+        if (local) toast(`Stop added to line ${LINE_NAMES[line.color]}`, line.color);
+        return true;
+      }
+      case 'bypass': {
+        const i = line ? line.stations.indexOf(c.sid) : -1, st = stationById(g, c.sid);
+        if (!own || extreme(g) || i < 0 || (!line.loop && (i === 0 || i === N - 1))) return false;
+        if (line.loop && N <= 3) { if (local) refuse('Loops need at least three stops', 'Open the loop first'); return false; }
+        const prev = line.stations[(i - 1 + N) % N], next = line.stations[(i + 1) % N];
+        if (!tunnelsFit(g, [[prev, next]], [[prev, c.sid], [c.sid, next]])) { if (local) refuseTunnel(); return false; }
+        for (const tr of g.trains.filter((t) => t.lineId === line.id)) { const loc = locate(line, tr); if (loc && loc.from === c.sid && st) { st.passengers.push(...tr.passengers); tr.passengers = []; } }
+        line.stations.splice(i, 1); rebuildAll(g); bump(g);
+        if (local) toast(`Stop bypassed on line ${LINE_NAMES[line.color]}`, line.color);
+        return true;
+      }
+      case 'delete': {
+        if (!own || extreme(g)) return false;
+        const li = line.color; deleteLine(g, line);
+        if (local) toast(`Line ${LINE_NAMES[li]} removed · train back in depot`, li);
+        return true;
+      }
+      case 'loco':
+        if (!own || d.locosAvail <= 0) return false;
+        addTrain(g, line);
+        if (local) { sfx.place(); toast(`Locomotive added to line ${LINE_NAMES[line.color]}`, line.color); }
+        return true;
+      case 'carriage': {
+        const tr = g.trains.find((t) => t.id === c.train), tl = tr && lineById(g, tr.lineId);
+        if (!tr || !tl || tl.owner !== p || d.carriagesAvail <= 0) return false;
+        tr.cars++; d.carriagesAvail--;
+        if (local) { sfx.place(); toast(`Carriage attached on line ${LINE_NAMES[tl.color]} · ${tr.cars} cars`, tl.color); }
+        return true;
+      }
+      case 'interchange': {
+        const st = stationById(g, c.sid);
+        if (!st || st.interchange || d.interchangesAvail <= 0) return false;
+        st.interchange = true; d.interchangesAvail--; bump(g);
+        if (local) { sfx.place(); toast(`The ${st.shape} is now an interchange`); }
+        return true;
+      }
+      case 'reward':
+        if (g.modal !== 'reward' || rewardPicker(g) !== p || !g.rewardChoices || !g.rewardChoices.includes(c.choice)) return false;
+        chooseReward(g, c.choice, p); return true;
+      case 'pause': g.paused = !!c.on; announce(g.paused ? 'Paused' : 'Resumed', false); return true;
+      case 'speed': g.speed = c.v === 2 ? 2 : 1; renderSpeed(); return true;
+    }
+    return false;
+  }
+  // Co-op edits land a couple of turns later, so a drag must not re-send the same command while it waits.
+  function send(c, key) {
+    if (net && drag && drag.sent && drag.sent.key === key && drag.sent.rev === G.rev) return true;
+    if (drag) drag.sent = { key, rev: G.rev };
+    return issue(c);
   }
 
   // ---------- hit testing ----------
@@ -1196,7 +1348,7 @@
     return out;
   }
   function hitHandle(g, x, y) {
-    const line = lineById(g, g.selectedLine); if (!line) return null;
+    const line = lineById(g, g.selectedLine); if (!line || line.owner !== me) return null;
     let bd = 22, best = null;
     for (const h of lineHandles(g, line)) { const d = Math.hypot(h.x - x, h.y - y); if (d < bd) { bd = d; best = h; } }
     return best;
@@ -1221,21 +1373,26 @@
       return;
     }
     const cap = hitCap(G, x, y);
-    if (cap) { drag = { mode: 'extend', line: cap.line, end: cap.end }; return; }
+    if (cap) {
+      if (cap.line.owner !== me) { refuse('That is your partner\'s line', `You draw ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}`); return; }
+      drag = { mode: 'extend', line: cap.line, end: cap.end }; return;
+    }
     const st = hitStation(G, x, y);
     if (st) {
-      if (G.linesAvail > 0) { drag = { mode: 'new', from: st.id, color: null }; if (G.selectedLine) selectLine(null); }
+      if (depot(G).linesAvail > 0) { drag = { mode: 'new', from: st.id, color: null }; if (G.selectedLine) selectLine(null); }
       else {
         ensureRides(G);
-        const ls = (G.linesAt.get(st.id) || []).filter((l) => !l.loop && (l.stations[0] === st.id || l.stations[l.stations.length - 1] === st.id));
+        const ls = (G.linesAt.get(st.id) || []).filter((l) => l.owner === me && !l.loop && (l.stations[0] === st.id || l.stations[l.stations.length - 1] === st.id));
         if (ls.length) drag = { mode: 'extend', line: ls[0], end: ls[0].stations[0] === st.id ? 'head' : 'tail' };
-        else refuse(`All ${G.linesTotal} lines are drawn`, 'Extend a cap, or remove a line from the tray');
+        else refuse(`All ${depot(G).linesTotal} ${G.coop ? 'of your lines' : 'lines'} are drawn`, 'Extend a cap, or remove a line from the tray');
       }
       return;
     }
     const h = hitLine(G, x, y);
     if (h) {
       if (G.selectedLine !== h.line.id) selectLine(h.line.id);
+      // a partner's line can be selected to read its coach line, but not edited
+      if (h.line.owner !== me) return;
       drag = { mode: 'insert', line: h.line, seg: stationSegOfPathSeg(h.line, h.seg) };
       pressPos = { x, y }; clearTimeout(pressTimer); pressTimer = null; pressLoop = null;
       if (h.line.loop) {
@@ -1260,48 +1417,44 @@
     if (drag.mode === 'bypass') return;
     if (drag.mode === 'tray') { drag = { mode: 'new', from: st.id, color: drag.color }; return; }
     if (drag.mode === 'new') {
-      if (st.id !== drag.from) { const line = createLine(G, drag.from, st.id, drag.color); drag = line ? { mode: 'extend', line, end: 'tail' } : drag; }
+      if (drag.b != null) {
+        // co-op: the line appears a couple of turns after it was issued; pick it up and carry on extending
+        const line = G.lines.find((l) => l.owner === me && l.stations.length === 2 && l.stations[0] === drag.from && l.stations[1] === drag.b);
+        if (line) drag = { mode: 'extend', line, end: 'tail' };
+        return;
+      }
+      if (st.id === drag.from) return;
+      if (net) { issue({ k: 'create', a: drag.from, b: st.id, color: drag.color }); drag.b = st.id; }
+      else { const line = createLine(G, drag.from, st.id, drag.color); if (line) drag = { mode: 'extend', line, end: 'tail' }; }
       return;
     }
     if (drag.mode === 'insert') {
       const line = drag.line; if (!G.lines.includes(line)) { drag = null; return; }
       if (line.stations.includes(st.id)) return;
-      const N = line.stations.length, a = line.stations[drag.seg], b = line.stations[(drag.seg + 1) % N];
-      if (!tunnelsFit(G, [[a, st.id], [st.id, b]], [[a, b]])) { refuseTunnel(); drag = null; return; }
-      line.stations.splice(drag.seg + 1, 0, st.id);
-      rebuildAll(G); bump(G); drag = null;
-      toast(`Stop added to line ${LINE_NAMES[line.color]}`, line.color);
+      issue({ k: 'insert', line: line.id, seg: drag.seg, sid: st.id }); drag = null;
       return;
     }
     const line = drag.line;
     if (!G.lines.includes(line)) { drag = null; return; }
     const N = line.stations.length;
-    const endIdx = drag.end === 'head' ? 0 : N - 1;
-    const endSid = line.stations[endIdx];
+    const endSid = line.stations[drag.end === 'head' ? 0 : N - 1];
     if (st.id === endSid) return;
     const neighborSid = line.stations[drag.end === 'head' ? 1 : N - 2];
     if (st.id === neighborSid && !line.loop) {
       if (extreme(G)) { refuseExtreme(); return; }
-      const refund = pairCrossings(G, endSid, neighborSid);
-      if (N <= 2) { const color = line.color; deleteLine(G, line); drag = { mode: 'new', from: st.id, color }; }
-      else { line.stations.splice(endIdx, 1); rebuildAll(G); bump(G); }
-      if (refund) toast(`Tunnel refunded · ${tunnelsAvail(G)}/${G.tunnelsTotal}`);
+      send({ k: 'retract', line: line.id, end: drag.end }, 'retract:' + st.id);
+      if (N <= 2) drag = { mode: 'new', from: st.id, color: line.color };
       return;
     }
     if (line.loop) return;
     const otherEnd = drag.end === 'head' ? line.stations[N - 1] : line.stations[0];
     if (st.id === otherEnd) {
       if (N < 3) { refuse('Loops need at least three stops'); return; }
-      if (!tunnelsFit(G, [[endSid, otherEnd]])) { refuseTunnel(); return; }
-      line.loop = true; rebuildAll(G); bump(G); drag = null;
-      toast(`Loop closed on line ${LINE_NAMES[line.color]} · trains run one way`, line.color);
-      if (!loopCoached) { loopCoached = true; G.loopCoachLine = line.id; }
+      if (send({ k: 'loop', line: line.id }, 'loop')) drag = null;
       return;
     }
     if (line.stations.includes(st.id)) { refuse('Already on this line'); return; }
-    if (!tunnelsFit(G, [[endSid, st.id]])) { refuseTunnel(); return; }
-    if (drag.end === 'head') line.stations.unshift(st.id); else line.stations.push(st.id);
-    rebuildAll(G); bump(G);
+    send({ k: 'extend', line: line.id, end: drag.end, sid: st.id }, 'extend:' + st.id);
   }
   function onUp() {
     if (pressLoop) { const pl = pressLoop; pressLoop = null; breakLoop(pl.line, pl.seg); }
@@ -1309,19 +1462,7 @@
     if (drag && drag.mode === 'bypass' && interactive()) {
       const { line, sid } = drag;
       if (Math.hypot(pointer.x - drag.sx, pointer.y - drag.sy) > 24 && G.lines.includes(line)) {
-        if (extreme(G)) refuseExtreme();
-        else {
-          const i = line.stations.indexOf(sid), N = line.stations.length;
-          const prev = line.stations[(i - 1 + N) % N], next = line.stations[(i + 1) % N];
-          const st = stationById(G, sid);
-          if (N <= 3 && line.loop) refuse('Loops need at least three stops', 'Open the loop first');
-          else if (!tunnelsFit(G, [[prev, next]], [[prev, sid], [sid, next]])) refuseTunnel();
-          else {
-            for (const tr of G.trains.filter((t) => t.lineId === line.id)) { const loc = locate(line, tr); if (loc && loc.from === sid && st) { st.passengers.push(...tr.passengers); tr.passengers = []; } }
-            line.stations.splice(i, 1); rebuildAll(G); bump(G);
-            toast(`Stop bypassed on line ${LINE_NAMES[line.color]}`, line.color);
-          }
-        }
+        if (extreme(G)) refuseExtreme(); else issue({ k: 'bypass', line: line.id, sid });
       }
     }
     drag = null; clearTimeout(pressTimer); pressTimer = null;
@@ -1335,12 +1476,10 @@
   function breakLoop(line, pathSeg) {
     if (!G.lines.includes(line) || !line.loop) return;
     if (extreme(G)) { refuseExtreme(); return; }
-    const k = stationSegOfPathSeg(line, pathSeg), s = line.stations;
-    line.stations = [...s.slice(k + 1), ...s.slice(0, k + 1)];
-    line.loop = false; rebuildAll(G); bump(G);
-    toast(`Loop opened on line ${LINE_NAMES[line.color]}`, line.color);
+    if (line.owner !== me) { refuse('That is your partner\'s loop'); return; }
+    issue({ k: 'unloop', line: line.id, seg: stationSegOfPathSeg(line, pathSeg) });
   }
-  const overlayOpen = () => !ui.startOv.hidden || !ui.rewardOv.hidden || !ui.overOv.hidden || !ui.helpOv.hidden;
+  const overlayOpen = () => !ui.startOv.hidden || !ui.rewardOv.hidden || !ui.overOv.hidden || !ui.helpOv.hidden || !netUi.ov.hidden;
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !ui.menu.hidden) { closeMenu(); return; }
     if (!G || !G.started || overlayOpen()) return;
@@ -1356,19 +1495,22 @@
   });
   function removeSelectedLine() {
     const line = lineById(G, G.selectedLine); if (!line) return;
+    if (line.owner !== me) { refuse('That is your partner\'s line'); return; }
     if (extreme(G)) { refuseExtreme(); return; }
     if (G.placing) stopPlacement(G);
-    const li = line.color; deleteLine(G, line); renderHud();
-    toast(`Line ${LINE_NAMES[li]} removed · train back in depot`, li);
+    issue({ k: 'delete', line: line.id }); renderHud();
   }
 
   // ---------- HUD ----------
-  const pausedNow = (g) => !!(g && (g.paused || g.modal === 'reward' || g.placing));
-  function togglePause() { if (!G || G.over || G.modal) return; G.paused = !G.paused; announce(G.paused ? 'Paused' : 'Resumed', false); renderHud(); }
-  function setSpeed(s) { if (!G) return; G.speed = s; ui.btnSpeed1.setAttribute('aria-pressed', String(s === 1)); ui.btnSpeed2.setAttribute('aria-pressed', String(s === 2)); ui.mSpeed1.setAttribute('aria-pressed', String(s === 1)); ui.mSpeed2.setAttribute('aria-pressed', String(s === 2)); }
+  const pausedNow = (g) => !!(g && halted(g));
+  function renderSpeed() { const s = G ? G.speed : 1; for (const b of [ui.btnSpeed1, ui.mSpeed1]) b.setAttribute('aria-pressed', String(s === 1)); for (const b of [ui.btnSpeed2, ui.mSpeed2]) b.setAttribute('aria-pressed', String(s === 2)); }
+  // Pause and speed are shared state: in co-op they travel as commands so both peers halt and run together.
+  function togglePause() { if (!G || G.over || G.modal) return; issue({ k: 'pause', on: !G.paused }); }
+  function setSpeed(s) { if (!G || G.over) return; issue({ k: 'speed', v: s }); }
   function launch(city, mode, seed, daily) {
+    if (mode !== 'coop') { closeNet(); me = 0; }
     G = newGame(city, mode, seed, daily); G.started = true; loopCoached = false;
-    setSpeed(1); closeMenu();
+    acc = 0; renderSpeed(); closeMenu();
     ui.banner.hidden = true; ui.startOv.hidden = true; ui.overOv.hidden = true; ui.helpOv.hidden = true;
     ui.btnEnd.hidden = mode !== 'zen'; ui.mEnd.hidden = mode !== 'zen';
     ui.toasts.innerHTML = ''; hideRefusal();
@@ -1402,22 +1544,27 @@
   ui.btnRules.addEventListener('click', () => openHelp('start'));
   ui.btnRules2.addEventListener('click', () => openHelp('start'));
   ui.btnHelpClose.addEventListener('click', () => { ui.helpOv.hidden = true; if (helpFrom === 'start') ui.startOv.hidden = false; if (G && G.modal === 'help') G.modal = null; });
-  ui.btnStart.addEventListener('click', () => { unlockAudio(); launch(pick.city, pick.mode, (Math.random() * 1e9) | 0, false); });
+  ui.btnStart.addEventListener('click', () => { unlockAudio(); if (pick.mode === 'coop') openCoop(null); else launch(pick.city, pick.mode, (Math.random() * 1e9) | 0, false); });
   ui.btnDaily.addEventListener('click', () => { unlockAudio(); const s = todaySeed(); launch(dailyCity(s), 'normal', s, true); });
-  ui.btnAgain.addEventListener('click', () => { launch(G.city, G.mode, G.daily ? G.seed : (Math.random() * 1e9) | 0, G.daily); });
-  ui.btnMenu.addEventListener('click', () => { ui.overOv.hidden = true; ui.startOv.hidden = false; G.started = false; renderStart(); });
+  ui.btnAgain.addEventListener('click', () => {
+    if (G.coop) { ui.overOv.hidden = true; playAgainCoop(); return; }
+    launch(G.city, G.mode, G.daily ? G.seed : (Math.random() * 1e9) | 0, G.daily);
+  });
+  ui.btnMenu.addEventListener('click', () => { closeNet(); me = 0; ui.overOv.hidden = true; ui.startOv.hidden = false; G.started = false; renderStart(); });
   ui.btnLater.addEventListener('click', () => { nextPlacement(G); toast('Kept in the depot · tap a token to place it later'); });
   ui.btnRemoveLine.addEventListener('click', removeSelectedLine);
-  ui.btnCopy.addEventListener('click', () => {
-    const text = `Tiny Transit · ${CITIES[G.city].name} · ${MODES[G.mode].name} · ${seedLabel(G)}: ${G.score} passengers over ${Math.floor(G.day)} days with ${G.stations.length} stations.`;
-    const done = () => { ui.btnCopy.textContent = 'Copied'; };
+  function copyText(text, btn) {
+    const done = () => { btn.textContent = 'Copied'; };
     const fallback = () => {
       const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); done(); } catch (e) { ui.btnCopy.textContent = 'Select and copy: ' + text; }
+      try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = 'Copy failed. Select the text and copy it'; }
       document.body.removeChild(ta);
     };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+  }
+  ui.btnCopy.addEventListener('click', () => {
+    copyText(`Tiny Transit · ${CITIES[G.city].name} · ${MODES[G.mode].name} · ${seedLabel(G)}: ${G.score} passengers over ${Math.floor(G.day)} days with ${G.stations.length} stations.`, ui.btnCopy);
   });
 
   const MINIMAP = {
@@ -1434,11 +1581,13 @@
       ui.cityPick.appendChild(b);
     }
     for (const [k, m] of Object.entries(MODES)) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.setAttribute('aria-pressed', String(pick.mode === k));
-      b.innerHTML = `<strong>${m.name}</strong><span>${m.desc}</span>`;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'opt' + (m.online ? ' online' : ''); b.setAttribute('aria-pressed', String(pick.mode === k));
+      // the online mode is a different kind of thing from the three solo rules, so it gets a heavier divider and a kicker
+      b.innerHTML = `${m.online ? '<span class="kicker">Online</span>' : ''}<strong>${m.name}</strong><span>${m.desc}</span>`;
       b.addEventListener('click', () => { pick.mode = k; renderStart(); });
       ui.modePick.appendChild(b);
     }
+    ui.lineCap.textContent = pick.mode === 'coop' ? '4 lines each. Two to start, one more each Monday the upgrade is yours.' : '8 lines. Three to start, one more each Monday you choose it.';
     ui.swrow.innerHTML = LINE_NAMES.map((l, i) => `<span class="sw" style="background:${LINE_CSS[i]}">${l}</span>`).join('');
     const s = todaySeed(), db = parseInt(store.get(`tt_best_daily_${s}`, '0'), 10) || 0;
     ui.dailyName.textContent = `${CITIES[dailyCity(s)].name} · Normal`;
@@ -1448,18 +1597,23 @@
     ui.pbVal.textContent = pb ? `${pb.score} carried` : '0 carried';
     ui.pbWhere.textContent = pb ? `${CITIES[pb.city] ? CITIES[pb.city].name : ''} · ${MODES[pb.mode] ? MODES[pb.mode].name : ''} · Week ${pb.week}` : 'No runs yet';
     ui.pbPhone.textContent = pb ? `Personal best ${pb.score} · ${CITIES[pb.city] ? CITIES[pb.city].name : ''}` : 'No runs yet';
-    ui.btnStart.textContent = isPhone() ? `Start · ${CITIES[pick.city].name} · ${MODES[pick.mode].name}` : 'Start';
+    const verb = pick.mode === 'coop' ? 'Find a partner' : 'Start';
+    ui.btnStart.textContent = isPhone() ? `${verb} · ${CITIES[pick.city].name}${pick.mode === 'coop' ? '' : ' · ' + MODES[pick.mode].name}` : verb;
   }
 
   function coachFor(g) {
-    if (g.placing === 'loco') { const lit = g.lines.map((l) => LINE_NAMES[l.color]); return `${lit.length === 1 ? 'Line ' + lit[0] + ' is' : 'Lines ' + lit.slice(0, -1).join(', ') + ' and ' + lit.slice(-1) + ' are'} lit. The locomotive joins where the gap between trains is widest.`; }
-    if (g.placing === 'carriage') return `${g.trains.length === 1 ? 'The train is' : 'All trains are'} lit. A carriage adds 6 seats.`;
+    if (g.placing === 'loco') { const lit = myLines(g).map((l) => LINE_NAMES[l.color]); return `${lit.length === 1 ? 'Line ' + lit[0] + ' is' : 'Lines ' + lit.slice(0, -1).join(', ') + ' and ' + lit.slice(-1) + ' are'} lit. The locomotive joins where the gap between trains is widest.`; }
+    if (g.placing === 'carriage') return `${myTrains(g).length === 1 ? 'The train is' : g.coop ? 'All your trains are' : 'All trains are'} lit. A carriage adds 6 seats.`;
     if (g.placing === 'interchange') return 'Stations are lit. An interchange holds 12 and halves stopping time.';
-    if (g.selectedLine) { const l = lineById(g, g.selectedLine); if (l) return `Line ${LINE_NAMES[l.color]} selected. ${extreme(g) ? 'Drag a cap to extend, or a midpoint onto a station to add a stop.' : 'Drag a cap to extend, a midpoint onto a station to add a stop, a stop away to bypass it.'}`; }
+    if (g.selectedLine) {
+      const l = lineById(g, g.selectedLine);
+      if (l && l.owner !== me) { const n = g.trains.filter((t) => t.lineId === l.id).length; return `Line ${LINE_NAMES[l.color]} is your partner's: ${l.stations.length} stops, ${n} train${n === 1 ? '' : 's'}. You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}.`; }
+      if (l) return `Line ${LINE_NAMES[l.color]} selected. ${extreme(g) ? 'Drag a cap to extend, or a midpoint onto a station to add a stop.' : 'Drag a cap to extend, a midpoint onto a station to add a stop, a stop away to bypass it.'}`;
+    }
     if (g.loopCoachLine) { const l = lineById(g, g.loopCoachLine); if (l && l.loop) return `Line ${LINE_NAMES[l.color]} runs as a loop: one way, 25% faster. Long-press a segment to open it.`; g.loopCoachLine = null; }
     if (!g.everDrew && g.stations.length >= 2) { const p = coachPair(g); return p ? `Drag from the ${p[0].shape} to the ${p[1].shape}.` : 'Drag between two stations to draw a line.'; }
-    if (!g.lines.length) return 'Passengers want a station of a different shape. Your first train takes them there.';
-    if (g.trains.length === 0) return 'Your line has no train. The next locomotive arrives on Monday.';
+    if (!myLines(g).length) return g.coop ? `You draw ${colorsOf(g, me).map((i) => LINE_NAMES[i]).join(', ')}; your partner draws the rest. Drag between two stations to start.` : 'Passengers want a station of a different shape. Your first train takes them there.';
+    if (!myTrains(g).length) return 'Your line has no train. The next locomotive arrives on Monday.';
     if (hasRivers(g) && tunnelsAvail(g) === 0 && availableColors(g).length === 0) return 'No tunnels left. Route around the river, or pick Tunnels on Monday.';
     return 'Drag between two stations to draw a line, or drag a ready letter onto a station.';
   }
@@ -1483,10 +1637,21 @@
   const TOKEN_LABEL = { loco: 'Locomotive', carriage: 'Carriage', interchange: 'Interchange' };
   function renderTray(g) {
     ui.pills.innerHTML = '';
-    const avail = availableColors(g);
+    const d = depot(g), avail = availableColors(g), mine = colorsOf(g, me);
     const drawnBy = new Map(g.lines.map((l) => [l.color, l]));
     for (let i = 0; i < CFG.maxLines; i++) {
       const line = drawnBy.get(i);
+      if (g.coop && !mine.includes(i)) {
+        // the partner's drawn lines sit dimmed in the tray; tapping one selects it read-only
+        if (!line) continue;
+        const b = document.createElement('button'); b.type = 'button';
+        b.className = 'pill drawn partner' + (g.selectedLine === line.id ? ' selected' : '');
+        b.style.setProperty('--c', LINE_CSS[i]); b.innerHTML = LINE_NAMES[i] + (line.loop ? LOOP_SVG : '');
+        b.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, your partner's, ${line.stations.length} stops${line.loop ? ', loop' : ''}${g.selectedLine === line.id ? ', selected' : ''}`);
+        b.setAttribute('aria-pressed', String(g.selectedLine === line.id));
+        b.addEventListener('click', () => { if (!interactive()) return; selectLine(g.selectedLine === line.id ? null : line.id); });
+        ui.pills.appendChild(b); continue;
+      }
       if (line) {
         const b = document.createElement('button'); b.type = 'button';
         b.className = 'pill drawn' + (g.selectedLine === line.id ? ' selected' : '');
@@ -1517,7 +1682,7 @@
       }
     }
     ui.tokens.innerHTML = '';
-    const counts = { loco: g.locosAvail, carriage: g.carriagesAvail, interchange: g.interchangesAvail };
+    const counts = { loco: d.locosAvail, carriage: d.carriagesAvail, interchange: d.interchangesAvail };
     for (const kind of ['loco', 'carriage', 'interchange']) {
       const b = document.createElement('button'); b.type = 'button';
       const n = counts[kind], active = g.placing === kind;
@@ -1537,26 +1702,29 @@
       ui.tokens.appendChild(d);
     }
     const sel = lineById(g, g.selectedLine);
-    ui.btnRemoveLine.hidden = !sel || !!g.placing || extreme(g);
+    ui.btnRemoveLine.hidden = !sel || sel.owner !== me || !!g.placing || extreme(g);
     if (sel) ui.btnRemoveLine.textContent = `Remove line ${LINE_NAMES[sel.color]}`;
   }
   function renderHud() {
     const g = G; if (!g) return;
     ui.score.textContent = g.score;
     const modeTxt = g.daily ? 'Daily' : MODES[g.mode].name;
-    ui.scoreSub.textContent = isPhone() ? `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)}` : `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)} · ${CITIES[g.city].name} · ${modeTxt}`;
-    const dayIdx = Math.floor(g.day) % 7, frac = g.day - Math.floor(g.day), paused = pausedNow(g);
+    const tally = g.coop ? `you ${carriedBy(g, me)} · partner ${carriedBy(g, 1 - me)}` : `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)}`;
+    ui.scoreSub.textContent = isPhone() ? tally : `${tally} · ${CITIES[g.city].name} · ${modeTxt}`;
+    const dayIdx = Math.floor(g.day) % 7, frac = g.day - Math.floor(g.day), paused = pausedNow(g), waiting = !paused && !!(net && net.waiting);
     ui.clock.classList.toggle('paused', paused);
     ui.clock.style.background = paused ? 'none' : `conic-gradient(var(--ink) ${Math.round(frac * 360)}deg, transparent 0deg)`;
     ui.dayname.textContent = isPhone() ? DAYS[dayIdx].slice(0, 3) : DAYS[dayIdx];
-    const wk = isPhone() ? (paused ? `W${g.week} · paused` : `W${g.week} · D${Math.floor(g.day) + 1} · ${g.speed}×`) : (paused ? `Week ${g.week} · paused` : `Week ${g.week} · day ${Math.floor(g.day) + 1}`);
-    ui.weektxt.textContent = wk; ui.weektxt.classList.toggle('paused', paused);
+    const wk = isPhone()
+      ? (paused ? `W${g.week} · paused` : waiting ? `W${g.week} · waiting` : `W${g.week} · D${Math.floor(g.day) + 1} · ${g.speed}×`)
+      : (paused ? `Week ${g.week} · paused` : waiting ? `Week ${g.week} · waiting for partner` : `Week ${g.week} · day ${Math.floor(g.day) + 1}`);
+    ui.weektxt.textContent = wk; ui.weektxt.classList.toggle('paused', paused || waiting);
     ui.clockWrap.setAttribute('aria-label', `${DAYS[dayIdx]}, week ${g.week} day ${Math.floor(g.day) + 1}, ${g.speed}× speed, ${Math.round(frac * 100)}% of the day${paused ? ', paused' : ''}`);
     ui.btnPause.textContent = g.paused ? 'Paused' : 'Pause'; ui.btnPause.classList.toggle('pausedCell', g.paused); ui.btnPause.setAttribute('aria-pressed', String(g.paused));
     const showFrame = paused && g.started && !g.over;
     ui.pauseFrame.hidden = !showFrame; ui.pauseTab.hidden = !showFrame;
     canvas.classList.toggle('dim', showFrame);
-    const key = [g.linesAvail, g.linesTotal, g.locosAvail, g.carriagesAvail, g.interchangesAvail, g.tunnelsTotal, g.tunnelsUsed, g.placing, g.selectedLine, g.lines.map((l) => l.color + (l.loop ? 'o' : '') + l.stations.length).join(',')].join('|');
+    const key = [JSON.stringify(g.depots), g.tunnelsTotal, g.tunnelsUsed, g.placing, g.selectedLine, g.lines.map((l) => l.color + (l.loop ? 'o' : '') + l.stations.length).join(',')].join('|');
     if (key !== hudKey) { hudKey = key; renderTray(g); }
     if (g.started) setCoach(coachFor(g));
   }
@@ -1649,7 +1817,7 @@
     // tunnel marks under lines
     if (hasRivers(g)) for (const line of g.lines) for (const cr of riverCrossings(g, line.path)) tunnelMark(ctx, cr);
     // placement halos
-    if (g.placing === 'loco') for (const line of g.lines) drawPath(ctx, line.path, LC(line.color), 20 + CFG.lineWidth, null, 0.22);
+    if (g.placing === 'loco') for (const line of myLines(g)) drawPath(ctx, line.path, LC(line.color), 20 + CFG.lineWidth, null, 0.22);
     const rot = reducedMotion() ? 0 : (now / 8000) * Math.PI * 2;
     const dashedTarget = (x, y) => { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.strokeStyle = theme.accent; ctx.lineWidth = 3; ctx.setLineDash([5, 5]); ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); };
     if (g.placing === 'interchange') for (const st of g.stations) if (!st.interchange) dashedTarget(st.x, st.y);
@@ -1663,7 +1831,7 @@
         for (let d = 60; d < line.total; d += 120) { const p = pointAt(line, d); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); ctx.beginPath(); ctx.moveTo(-4, -4); ctx.lineTo(0, 0); ctx.lineTo(-4, 4); ctx.stroke(); ctx.restore(); }
         ctx.restore();
       }
-      if (line === sel) continue;
+      if (line === sel && sel.owner === me) continue;
       for (const cap of capPositions(g, line)) {
         ctx.save(); ctx.strokeStyle = col; ctx.lineCap = 'round';
         if (hoverCap === line.id + ':' + cap.end) { ctx.globalAlpha *= 0.25; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(cap.x, cap.y, 22, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha /= 0.25; }
@@ -1715,7 +1883,7 @@
         let d = tr.dist - tr.dir * 34 * k;
         if (!line.loop) d = Math.max(0, Math.min(line.total, d));
         const p = pointAt(line, d);
-        if (g.placing === 'carriage') dashedTarget(p.x, p.y);
+        if (g.placing === 'carriage' && line.owner === me) dashedTarget(p.x, p.y);
         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); if (tr.dir < 0) ctx.rotate(Math.PI);
         ctx.fillStyle = col; ctx.fillRect(-15, -7, 30, 14);
         ctx.strokeStyle = theme.bg; ctx.lineWidth = 1.5; ctx.strokeRect(-15, -7, 30, 14);
@@ -1727,8 +1895,8 @@
         ctx.restore();
       }
     }
-    // handles on the selected line
-    if (sel && !g.over) {
+    // handles on the selected line (a partner's line is view-only: glow, no handles)
+    if (sel && sel.owner === me && !g.over) {
       const col = LC(sel.color), onCol = theme.dark ? theme.bg : '#ffffff';
       for (const h of lineHandles(g, sel)) {
         const hot = hoverHandle && hoverHandle.kind === h.kind && hoverHandle.x === h.x && hoverHandle.y === h.y;
@@ -1817,6 +1985,118 @@
   window.addEventListener('resize', resize);
   window.addEventListener('resize', () => { if (!ui.startOv.hidden) renderStart(); });
 
+  // ---------- co-op networking ----------
+  // Deterministic lockstep over a WebSocket relay (server/worker.js): only commands travel, and each peer runs the
+  // same simulation. Time is cut into turns of TURN_MS. A command issued during turn n is applied by both peers at
+  // turn n + INPUT_DELAY, host's commands first, so neither side ever needs the other's state. The relay pairs the
+  // first two arrivals in a room and forwards messages between them; it never reads the game.
+  const HEARTBEAT_MS = 1000, LOST_AFTER_MS = 10000;
+  function stateHash(g) {
+    let pax = 0;
+    for (const st of g.stations) pax += st.passengers.length;
+    for (const tr of g.trains) pax += tr.passengers.length * 7;
+    return [Math.round(g.t * 1000), g.score, g.stations.length, g.lines.length, g.trains.length, pax, g.nextId, g.tunnelsUsed, g.week].join(',');
+  }
+  const netOpen = () => !!(net && net.ws && net.ws.readyState === WebSocket.OPEN && net.paired && !net.lost);
+  function netSend(m) { if (net && net.ws && net.ws.readyState === WebSocket.OPEN) net.ws.send(JSON.stringify(m)); }
+  function resetTurns() { Object.assign(net, { turn: 0, acc: 0, queued: [], local: new Map(), inbox: new Map(), hashes: new Map(), theirHashes: new Map(), desync: false, waiting: false }); }
+  function runTurn() {
+    const n = net.turn;
+    net.local.set(n + INPUT_DELAY, net.queued); netSend({ t: 'turn', n: n + INPUT_DELAY, c: net.queued }); net.queued = [];
+    const mine = net.local.get(n) || [], theirs = net.inbox.get(n) || [];
+    net.local.delete(n); net.inbox.delete(n);
+    for (const [cmds, p] of me === 0 ? [[mine, 0], [theirs, 1]] : [[theirs, 0], [mine, 1]]) for (const c of cmds) apply(G, c, p);
+    runSteps(G, STEPS_PER_TURN);
+    net.turn++;
+    if (net.turn % SYNC_EVERY === 0) {
+      const h = stateHash(G); net.hashes.set(net.turn, h); netSend({ t: 'sync', n: net.turn, h });
+      if (net.theirHashes.has(net.turn)) checkSync(net.turn);
+    }
+  }
+  function checkSync(n) {
+    const mine = net.hashes.get(n), theirs = net.theirHashes.get(n);
+    net.hashes.delete(n); net.theirHashes.delete(n);
+    if (mine !== theirs && !net.desync) { net.desync = true; toast('The two maps have drifted apart · finish this run and find a fresh partner'); }
+  }
+  function netFrame(ms) {
+    net.acc = Math.min(net.acc + ms, 1000);
+    while (net.acc >= TURN_MS) {
+      // hold until the partner's commands for this turn have arrived
+      if (net.turn >= INPUT_DELAY && !net.inbox.has(net.turn)) { net.acc = TURN_MS; net.waiting = true; return; }
+      net.waiting = false; net.acc -= TURN_MS; runTurn();
+      if (G.over) return;
+    }
+  }
+  function onNetMessage(ev) {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (!m || typeof m !== 'object') return;
+    net.lastSeen = performance.now();
+    if (m.t === 'turn') net.inbox.set(m.n | 0, Array.isArray(m.c) ? m.c : []);
+    else if (m.t === 'sync') { net.theirHashes.set(m.n | 0, String(m.h)); if (net.hashes.has(m.n | 0)) checkSync(m.n | 0); }
+    else if (m.t === 'waiting') netUi.status.textContent = net.room ? 'Waiting for your friend to open the link.' : 'Looking for another player. This can take a moment.';
+    else if (m.t === 'matched') {
+      me = m.me === 1 ? 1 : 0; net.paired = true;
+      if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: pick.city, seed }); beginCoop(pick.city, seed); }
+      else netUi.status.textContent = 'Partner found. Starting.';
+    }
+    else if (m.t === 'start' && me === 1 && CITIES[m.city]) beginCoop(m.city, m.seed | 0);
+    else if (m.t === 'gone') onNetLost();
+  }
+  function beginCoop(city, seed) {
+    resetTurns(); netUi.ov.hidden = true;
+    launch(city, 'coop', seed, false);
+    toast(`You are player ${me + 1} · you draw ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}`);
+    announce(`Co-op started. You are player ${me + 1} and draw lines ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}.`, false);
+  }
+  function onNetLost() {
+    if (!net || net.lost) return;
+    net.lost = true;
+    if (G && G.coop && G.started && !G.over) finishRun(G, null, 'lost');
+    else if (!netUi.ov.hidden) netUi.status.textContent = net.paired ? 'Your partner left. Cancel and try again.' : 'Could not reach the matchmaking server. Check your connection and try again.';
+  }
+  function closeNet() {
+    if (!net) return;
+    const n = net; net = null; clearInterval(n.hb);
+    try { if (n.ws) { n.ws.onclose = null; n.ws.close(); } } catch (e) { /* already closed */ }
+  }
+  // Connect to the relay and wait in `room` (null for the public queue) until someone else arrives.
+  function connect(room) {
+    closeNet();
+    let ws;
+    try { ws = new WebSocket(`${RELAY_URL.replace(/\/$/, '')}/ws?room=${encodeURIComponent(room || 'public')}`); }
+    catch (e) { netUi.status.textContent = 'The matchmaking server address is not valid.'; return; }
+    net = { ws, room, paired: false, lost: false, lastSeen: performance.now(), hb: 0 }; resetTurns();
+    ws.onmessage = onNetMessage;
+    ws.onclose = () => { if (net && net.ws === ws) onNetLost(); };
+    ws.onerror = () => { if (net && net.ws === ws) onNetLost(); };
+    // the relay forwards heartbeats too; a partner who goes quiet for LOST_AFTER_MS is treated as gone even if the socket lingers
+    net.hb = setInterval(() => {
+      if (!net || net.ws !== ws || !net.paired) return;
+      netSend({ t: 'hb' });
+      if (performance.now() - net.lastSeen > LOST_AFTER_MS) onNetLost();
+    }, HEARTBEAT_MS);
+  }
+  const roomFromHash = () => { const m = /[#&]room=([a-z0-9-]{1,32})/i.exec(location.hash); return m ? m[1].toLowerCase() : null; };
+  const inviteLink = (room) => `${location.origin}${location.pathname}${location.search}#room=${room}`;
+  function openCoop(room) {
+    ui.startOv.hidden = true; ui.overOv.hidden = true; netUi.ov.hidden = false;
+    netUi.title.textContent = room ? 'Waiting for your friend' : 'Finding a partner';
+    netUi.status.textContent = 'Connecting.';
+    // a private room offers the same link again; the public queue offers a fresh one so a friend can skip the queue
+    const inviteRoom = room || Math.random().toString(36).slice(2, 8);
+    netUi.invite.hidden = false; netUi.copyLink.textContent = 'Copy link';
+    netUi.copyLink.onclick = () => { if (!room) { connect(inviteRoom); netUi.title.textContent = 'Waiting for your friend'; } copyText(inviteLink(inviteRoom), netUi.copyLink); };
+    connect(room);
+  }
+  function playAgainCoop() {
+    if (netOpen()) {
+      // the relay pair is still live: the host just deals a new map
+      if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: G.city, seed }); beginCoop(G.city, seed); }
+      else { netUi.ov.hidden = false; netUi.title.textContent = 'Playing again'; netUi.status.textContent = 'Waiting for the host to deal a new map.'; netUi.invite.hidden = true; }
+    } else openCoop(net && net.room ? net.room : null);
+  }
+  netUi.back.addEventListener('click', () => { closeNet(); me = 0; netUi.ov.hidden = true; ui.startOv.hidden = false; });
+
   // ---------- rules ----------
   const RULES = [
     ['Stations and passengers.', 'Stations appear over time, each with a shape. Passengers want any station of a different shape. Rare shapes draw crowds from the whole map. A dashed glyph has no route yet.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="14" cy="22" r="8"/><path d="M30 12 L36 22 L24 22 Z" stroke-linejoin="round"/><rect x="26" y="28" width="9" height="9" stroke-dasharray="2 2"/></svg>'],
@@ -1827,28 +2107,39 @@
     ['Tunnels.', 'Crossing a river spends one tunnel; the preview shows the cost at the crossing. Retracting a crossing gives it back. The budget sits at the right end of the tray. Dry Basin has no river.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 22 L40 22" stroke-width="10" stroke="var(--river-bank)"/><path d="M22 6 L22 38" stroke-width="3"/><rect x="14" y="12" width="16" height="20" stroke-width="2" opacity="0.6"/></svg>'],
     ['Crowding.', 'More than 6 waiting (12 at an interchange) starts a red ring. It closes in 40 seconds; when it does, the network shuts down. Anything red on the map needs you now.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3"><circle cx="22" cy="22" r="8"/><path d="M22 6 A16 16 0 0 1 38 22" stroke="var(--accent)" stroke-width="4"/><rect x="30" y="6" width="10" height="10" fill="var(--accent)" stroke="none"/></svg>'],
     ['Mondays.', 'Every Monday you receive a locomotive and choose one: a new line, a carriage, an interchange, or two tunnels. The map pauses while you decide.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="8" y="10" width="28" height="26"/><path d="M8 18 H36 M16 6 V12 M28 6 V12"/><rect x="14" y="23" width="6" height="6" fill="currentColor" stroke="none"/></svg>'],
+    ['Co-op.', 'Find a partner online, or send a friend the link. The host draws lines A to D and the guest E to H on one shared city; stations, tunnels and the game over are shared. Both get a locomotive every Monday and take turns choosing the upgrade. Passengers change trains wherever your lines meet.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 32 L18 20 L30 20"/><path d="M38 12 L26 24 L14 24"/><circle cx="6" cy="32" r="4" fill="var(--bg)"/><circle cx="38" cy="12" r="4" fill="var(--bg)"/></svg>'],
   ];
   { const ul = $('rulesList'); for (const [lead, t, ic] of RULES) { const li = document.createElement('li'); li.innerHTML = `${ic}<span><b>${lead}</b> ${t}</span>`; ul.appendChild(li); } }
 
   // ---------- main loop ----------
   const hudEl = $('hud'), bottomEl = $('bottom');
-  let last = performance.now();
+  // In co-op the reward card halts both peers (it is shared state); help and token placement only halt solo play.
+  function halted(g) { return g.paused || g.modal === 'reward' || (!g.coop && (g.modal === 'help' || !!g.placing)); }
+  function runSteps(g, n) { for (let i = 0; i < n; i++) { if (g.over || halted(g)) return; tick(g, STEP * g.speed); } }
+  let last = performance.now(), acc = 0;
   function frame(now) {
-    const raw = Math.min(0.05, (now - last) / 1000); last = now;
+    const ms = Math.min(250, now - last); last = now;
     if (now - themeAt > 1000) { readTheme(); themeAt = now; }
     const blocked = overlayOpen();
     if (hudEl.inert !== blocked) { hudEl.inert = blocked; bottomEl.inert = blocked; }
     const hideChrome = !G || !G.started;
     if (hudEl.hidden !== hideChrome) { hudEl.hidden = hideChrome; bottomEl.hidden = hideChrome; }
-    if (G && G.started && !G.over && !G.paused && !G.modal && !G.placing) tick(G, raw * G.speed);
+    if (G && G.started && !G.over) {
+      if (net && G.coop) netFrame(ms);
+      else if (halted(G)) acc = 0;
+      else { acc = Math.min(acc + ms / 1000, 0.1); while (acc >= STEP && !G.over && !halted(G)) { acc -= STEP; tick(G, STEP * G.speed); } }
+    }
     if (G) { renderHud(); draw(); }
     requestAnimationFrame(frame);
   }
   function start(data) {
     applyTheme(store.get('tt_theme', 'system'));
     resize(); readTheme(); renderSoundBtn(); renderStart();
-    if (data && data.G && data.G.stations && data.G.city) {
-      G = Object.assign({ floats: [], leavers: [], selectedLine: null, everDrew: true, failedStation: null, dayDelivered: 0, lastDayIdx: 0 }, data.G); G.rides = null; G.linesAt = null;
+    if (data && data.G && data.G.stations && data.G.city && !data.G.coop) {
+      G = Object.assign({ floats: [], leavers: [], selectedLine: null, everDrew: true, failedStation: null, dayDelivered: 0, lastDayIdx: 0, rev: 0 }, data.G); G.rides = null; G.linesAt = null;
+      if (!G.depots) { G.depots = [{ linesAvail: G.linesAvail, linesTotal: G.linesTotal, locosAvail: G.locosAvail, carriagesAvail: G.carriagesAvail, interchangesAvail: G.interchangesAvail }]; for (const l of G.lines) l.owner = 0; }
+      if (G.fixed == null) G.fixed = !!G.daily;
+      // snapshots from before the reference layout: adopt the current screen as the reference
       if (!G.ref) { G.ref = { W, H, pb: padBottom(), transpose: false }; for (const st of G.stations) { st.rx = st.x; st.ry = st.y; } G.riversRef = G.rivers || []; }
       if (G.nextStationAt == null) G.nextStationAt = G.t + (G.stationTimer || 0);
       if (G.paxState == null) G.paxState = (G.seed ^ 0x5bd1e995) | 0;
@@ -1861,14 +2152,16 @@
       if (G.modal === 'reward') { if (G.rewardChoices) showReward(G); else offerReward(G); }
       else if (G.modal === 'help') G.modal = null;
       if (G.placing) { ui.bannerText.textContent = PLACE_TEXT[G.placing]; ui.banner.hidden = false; }
-      setSpeed(G.speed || 1);
+      G.speed = G.speed || 1; renderSpeed();
     } else {
       G = newGame(pick.city, pick.mode, (Math.random() * 1e9) | 0, false);
     }
+    const room = roomFromHash();
+    if (room) { pick.mode = 'coop'; renderStart(); openCoop(room); }
     requestAnimationFrame(frame);
   }
   if (window.claude && window.claude.hot && window.claude.hot.snapshot) {
-    window.claude.hot.snapshot(() => { if (!G) return {}; const { rides, linesAt, ...rest } = G; return { G: JSON.parse(JSON.stringify(rest)) }; });
+    window.claude.hot.snapshot(() => { if (!G || G.coop) return {}; const { rides, linesAt, ...rest } = G; return { G: JSON.parse(JSON.stringify(rest)) }; });
   }
   window.claude && window.claude.hot && window.claude.hot.ready ? window.claude.hot.ready(start) : start((window.claude && window.claude.hot && window.claude.hot.data) || {});
 })();
