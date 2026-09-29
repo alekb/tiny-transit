@@ -175,6 +175,7 @@
   .opt svg { width: 100%; height: auto; display: block; }
   .opt strong { font: 800 15px var(--font); }
   .opt span { font: 400 12px/1.35 var(--font); color: var(--muted); }
+  .optgrid.cities { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .optgrid.modes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .optgrid.modes .opt { padding: 12px 10px; }
   .opt.online { border-left: 2px solid var(--ink); }
@@ -284,6 +285,10 @@
     .start h1 { font-size: 44px; }
     .start .pitch { font-size: 15px; }
     .cells2, .startBtns .btn.ghost, .foot { display: none; }
+    /* four cities: two rows of two */
+    .optgrid.cities { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .optgrid.cities .opt:nth-child(odd) { border-left: 0; }
+    .optgrid.cities .opt:nth-child(n+3) { border-top: 1px solid var(--hairline); }
     /* five modes: the three solo rules in one row, the two online modes in a row beneath, behind an ink rule */
     .optgrid.modes { grid-template-columns: repeat(6, minmax(0, 1fr)); }
     .optgrid.modes .opt { grid-column: span 2; padding: 12px; }
@@ -384,7 +389,7 @@
         <p class="foot" id="footNote">Light / Dark: follows system · Sound on</p>
       </div>
       <div>
-        <div class="pick"><span class="lbl">City</span><div class="rule"></div><div class="optgrid" id="cityPick"></div></div>
+        <div class="pick"><span class="lbl">City</span><div class="rule"></div><div class="optgrid cities" id="cityPick"></div></div>
         <div class="pick"><span class="lbl">Mode</span><div class="rule"></div><div class="optgrid modes" id="modePick"></div></div>
         <div class="swrow" id="swrow" aria-hidden="true"></div>
         <p class="caption" id="lineCap">8 lines. Three to start, one more each Monday you choose it.</p>
@@ -464,6 +469,8 @@
     riverside: { name: 'Riverside', desc: 'One river. 3 tunnels.', short: '1 river · 3 tunnels', rivers: 1, tunnels: 3, stationRate: 1, passengerRate: 1 },
     twinrivers: { name: 'Islands', desc: 'One river, islands. 4 tunnels.', short: 'River · islands · 4 tunnels', rivers: 1, islands: true, tunnels: 4, stationRate: 1, passengerRate: 0.95 },
     drybasin: { name: 'Dry Basin', desc: 'No water. Fast stations, heavy crowds.', short: 'No water · fast', rivers: 0, tunnels: 0, stationRate: 1.3, passengerRate: 1.15 },
+    // rolled from the seed on start: see rollGeo
+    anywhere: { name: 'Anywhere', desc: 'Rolled from the seed. Unknown until you start.', short: 'Rolled from the seed', random: true, rivers: 0, tunnels: 0, stationRate: 1, passengerRate: 1 },
   };
   const MODES = {
     normal: { name: 'Normal', desc: 'A crowded station ends the run.' },
@@ -600,7 +607,8 @@
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
   const todaySeed = () => { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); };
-  const dailyCity = (seed) => Object.keys(CITIES)[seed % 3];
+  // the daily rotates through the designed cities only, so its name always says what the map is
+  const dailyCity = (seed) => Object.keys(CITIES).filter((k) => !CITIES[k].random)[seed % 3];
   const seedLabel = (g) => (g.daily ? `Daily ${String(g.seed % 100).padStart(2, '0')} ${MONTHS[Math.floor(g.seed / 100) % 100 - 1]}` : `seed ${g.seed}`);
 
   // ---------- sound ----------
@@ -642,23 +650,28 @@
     // The daily and co-op use a fixed reference layout so every screen (and both peers) gets the same map.
     const ref = fixed ? { W: REF.W, H: REF.H, pb: padBottomFor(REF.W), transpose: W < H } : { W, H, pb: padBottom(), transpose: false };
     const startLines = coop ? CFG.coopStartLines : CFG.startLines;
-    // Rivals splits the city's tunnels between the players (rounded up) so neither can drain the other's budget.
-    const mkDepot = () => ({ linesAvail: startLines, linesTotal: startLines, locosAvail: startLines, carriagesAvail: 0, interchangesAvail: 0, tunnelsTotal: rivals ? Math.ceil(CITIES[city].tunnels / 2) : 0, tunnelsUsed: 0, score: 0, picked: null });
     const g = {
       city, mode, seed, daily: !!daily, coop, rivals, fixed, rngState: seed | 0, paxState: (seed ^ 0x5bd1e995) | 0, rewardState: (seed ^ 0x27d4eb2d) | 0, guestRewardState: (seed ^ 0x165667b1) | 0, ref,
       t: 0, day: 0, week: 1, score: 0, dayDelivered: 0, lastDayIdx: 0, over: false, paused: false, speed: 1, started: false, rev: 0,
       stations: [], lines: [], trains: [], floats: [], leavers: [], rivers: [], riversRef: [], nextId: 1,
-      depots: coop ? [mkDepot(), mkDepot()] : [mkDepot()],
-      tunnelsTotal: CITIES[city].tunnels, tunnelsUsed: 0,
+      depots: [], geo: null, tunnelsTotal: 0, tunnelsUsed: 0,
       spawnAcc: 0, nextStationAt: 0, rareUsed: [], placing: null, placeQueue: [], modal: null, rewardChoices: null, rewardChoicesBy: null, rewardPending: null,
       selectedLine: null, everDrew: false, failedStation: null,
       stats: { byLine: {}, boardings: {}, longestWait: 0, waitSum: 0, waitN: 0, gaveUp: 0 },
       rides: null, linesAt: null,
     };
-    if (CITIES[city].islands) g.riversRef = makeBraid(g); else if (CITIES[city].rivers) g.riversRef = [makeRiver(g)];
+    // Anywhere rolls its geography (water, tunnels, pace) from the seed before anything else draws on it
+    if (CITIES[city].random) g.geo = rollGeo(g);
+    const geo = geoOf(g);
+    g.tunnelsTotal = geo.tunnels;
+    // Rivals splits the city's tunnels between the players (rounded up) so neither can drain the other's budget.
+    const mkDepot = () => ({ linesAvail: startLines, linesTotal: startLines, locosAvail: startLines, carriagesAvail: 0, interchangesAvail: 0, tunnelsTotal: rivals ? Math.ceil(geo.tunnels / 2) : 0, tunnelsUsed: 0, score: 0, picked: null });
+    g.depots = coop ? [mkDepot(), mkDepot()] : [mkDepot()];
+    if (geo.lake) g.riversRef = [makeLake(g)]; else if (geo.islands) g.riversRef = makeBraid(g); else if (geo.rivers) g.riversRef = [makeRiver(g)];
+    if (g.geo && geo.islands) g.geo.islandCount = (g.riversRef.length - 1) / 2;
     syncScreen(g);
     for (let i = 0; i < 3; i++) addStation(g, 0);
-    g.nextStationAt = 14 / CITIES[city].stationRate;
+    g.nextStationAt = 14 / geo.stationRate;
     g.best = bestFor(g);
     return g;
   }
@@ -671,6 +684,15 @@
   function syncScreen(g) {
     for (const st of g.stations) { const p = toScreen(g, { x: st.rx, y: st.ry }); st.x = p.x; st.y = p.y; }
     g.rivers = g.riversRef.map((rv) => rv.map((p) => toScreen(g, p)));
+  }
+  // The numbers a map runs on: the city's own, or the geography Anywhere rolled for this run.
+  const geoOf = (g) => g.geo || CITIES[g.city];
+  const WATER_LABEL = { dry: 'dry', river: 'one river', lake: 'a lake' };
+  const cityLabel = (g) => (g.geo ? `Anywhere (${g.geo.water === 'islands' ? (g.geo.islandCount === 1 ? 'river, one island' : 'river, two islands') : WATER_LABEL[g.geo.water]})` : CITIES[g.city].name);
+  function rollGeo(g) {
+    const r = rng(g), water = r < 0.2 ? 'dry' : r < 0.5 ? 'river' : r < 0.8 ? 'islands' : 'lake';
+    const jitter = () => 0.85 + rng(g) * 0.3;
+    return { name: 'Anywhere', water, rivers: water === 'dry' ? 0 : 1, islands: water === 'islands', lake: water === 'lake', tunnels: { dry: 0, river: 3, islands: 4, lake: 3 }[water], stationRate: jitter(), passengerRate: jitter() };
   }
   const uid = (g) => g.nextId++;
   const stationById = (g, id) => g.stations.find((s) => s.id === id);
@@ -810,8 +832,25 @@
   }
   function refuseTunnel(x, y) { refuse('No tunnels left', 'Retract a crossing or choose Tunnels on Monday', x, y); }
   function nearRiver(g, x, y, d) {
-    for (const rv of g.riversRef) for (let j = 1; j < rv.length; j++) if (segDist(x, y, rv[j - 1], rv[j]) < d) return true;
+    for (const rv of g.riversRef) {
+      if (isLake(rv) && insidePoly(rv, x, y)) return true;
+      for (let j = 1; j < rv.length; j++) if (segDist(x, y, rv[j - 1], rv[j]) < d) return true;
+    }
     return false;
+  }
+  // A lake is a closed water outline; a line across it pays a tunnel per shore, like a river crossed twice.
+  const isLake = (rv) => rv.length > 3 && rv[0].x === rv[rv.length - 1].x && rv[0].y === rv[rv.length - 1].y;
+  function insidePoly(rv, x, y) {
+    let inside = false;
+    for (let i = 1; i < rv.length; i++) { const a = rv[i - 1], b = rv[i]; if ((a.y > y) !== (b.y > y) && x < a.x + ((y - a.y) * (b.x - a.x)) / (b.y - a.y)) inside = !inside; }
+    return inside;
+  }
+  // An octagon with 45° corners somewhere in the middle of the map, big enough that lines must tunnel under it or go round.
+  function makeLake(g) {
+    const { W: rw, H: rh, pb } = g.ref, top = PAD.top, bottom = rh - pb;
+    const a = 120 + rng(g) * 50, b = 85 + rng(g) * 40, c = Math.min(a, b) * 0.5;
+    const cx = rw * (0.3 + rng(g) * 0.4), cy = top + (bottom - top) * (0.3 + rng(g) * 0.4);
+    return [[-a + c, -b], [a - c, -b], [a, -b + c], [a, b - c], [a - c, b], [-a + c, b], [-a, b - c], [-a, -b + c], [-a + c, -b]].map(([dx, dy]) => ({ x: cx + dx, y: cy + dy }));
   }
 
   // ---------- stations & passengers ----------
@@ -1089,7 +1128,7 @@
 
   // ---------- simulation ----------
   function tick(g, dt) {
-    const city = CITIES[g.city];
+    const city = geoOf(g);
     g.t += dt; g.day = g.t / CFG.dayLength;
     const dayIdx = Math.floor(g.day);
     if (dayIdx !== g.lastDayIdx) { g.lastDayIdx = dayIdx; g.dayDelivered = 0; }
@@ -1180,7 +1219,7 @@
     if (isBest) { store.set(bestKey(g), g.score); store.set('tt_pb', JSON.stringify({ score: g.score, city: g.city, mode: g.mode, week: g.week })); g.best = g.score; }
     ui.overBest.textContent = g.rivals ? '–' : Math.max(prev, g.score); ui.overBest.classList.toggle('dim', !isBest);
     ui.overBestLbl.textContent = isBest ? 'new best' : 'best';
-    const rows = [['Map', `${CITIES[g.city].name} · ${MODES[g.mode].name} · ${seedLabel(g)}`]];
+    const rows = [['Map', `${cityLabel(g)} · ${MODES[g.mode].name} · ${seedLabel(g)}`]];
     rows.push(['Lines drawn', g.lines.length ? g.lines.map((l) => `${LINE_NAMES[l.color]} (${l.stations.length} stops)`).join(' · ') : 'none']);
     if (g.stats.waitN) {
       const busiest = Object.entries(g.stats.boardings).sort((a, b) => b[1] - a[1])[0];
@@ -1718,13 +1757,15 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
   }
   ui.btnCopy.addEventListener('click', () => {
-    copyText(`Tiny Transit · ${CITIES[G.city].name} · ${MODES[G.mode].name} · ${seedLabel(G)}: ${G.score} passengers over ${Math.floor(G.day)} days with ${G.stations.length} stations.`, ui.btnCopy);
+    copyText(`Tiny Transit · ${cityLabel(G)} · ${MODES[G.mode].name} · ${seedLabel(G)}: ${G.score} passengers over ${Math.floor(G.day)} days with ${G.stations.length} stations.`, ui.btnCopy);
   });
 
   const MINIMAP = {
     riverside: '<svg viewBox="0 0 150 80" aria-hidden="true"><path d="M-5 44 L40 44 L62 24 L110 24 L130 40 L160 40" fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round"/><path d="M-5 44 L40 44 L62 24 L110 24 L130 40 L160 40" fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round"/><circle cx="30" cy="22" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M84 47 L90 58 L78 58 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="118" y="54" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
     twinrivers: '<svg viewBox="0 0 150 80" aria-hidden="true"><g fill="none" stroke="var(--river-bank)" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"><path d="M-5 42 L36 42"/><path d="M36 42 L52 26 L96 26 L112 42"/><path d="M36 42 L52 58 L96 58 L112 42"/><path d="M112 42 L160 42"/></g><g fill="none" stroke="var(--river)" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"><path d="M-5 42 L36 42"/><path d="M36 42 L52 26 L96 26 L112 42"/><path d="M36 42 L52 58 L96 58 L112 42"/><path d="M112 42 L160 42"/></g><circle cx="74" cy="42" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M24 14 L30 25 L18 25 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="126" y="60" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
     drybasin: '<svg viewBox="0 0 150 80" aria-hidden="true"><circle cx="28" cy="26" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M76 20 L82 31 L70 31 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="112" y="24" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><circle cx="56" cy="58" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/><path d="M124 52 L130 63 L118 63 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><rect x="82" y="56" width="10" height="10" fill="var(--bg)" stroke="var(--ink)" stroke-width="2"/></svg>',
+    // water not yet known: a dashed river and a dashed lake, with the shapes still to come
+    anywhere: '<svg viewBox="0 0 150 80" aria-hidden="true"><path d="M-5 30 L34 30 L50 14 L160 14" fill="none" stroke="var(--river-bank)" stroke-width="7" stroke-dasharray="8 6" stroke-linejoin="round"/><path d="M60 52 L84 52 L96 64 L84 76 L60 76 L48 64 Z" fill="none" stroke="var(--river-bank)" stroke-width="5" stroke-dasharray="6 5" stroke-linejoin="round"/><circle cx="24" cy="56" r="5" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-dasharray="3 3"/><path d="M122 38 L128 49 L116 49 Z" fill="var(--bg)" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-dasharray="3 3"/><text x="118" y="70" font-size="20" font-weight="800" fill="var(--muted)" font-family="Archivo, system-ui, sans-serif">?</text></svg>',
   };
   function renderStart() {
     ui.cityPick.innerHTML = ''; ui.modePick.innerHTML = '';
@@ -1977,9 +2018,10 @@
     ctx.save(); if (dimAll) ctx.globalAlpha = 0.5;
     const sel = lineById(g, g.selectedLine);
     // rivers
-    // banks first, then water, so channels meeting at a fork join without a bank seam
-    for (const rv of g.rivers) drawPath(ctx, rv, theme.riverBank, CFG.riverWidth);
-    for (const rv of g.rivers) drawPath(ctx, rv, theme.river, CFG.riverWidth - 10);
+    // banks first, then water, so channels meeting at a fork join without a bank seam; a lake is a filled outline
+    const fillPoly = (rv, color) => { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(rv[0].x, rv[0].y); for (let i = 1; i < rv.length; i++) ctx.lineTo(rv[i].x, rv[i].y); ctx.closePath(); ctx.fill(); ctx.restore(); };
+    for (const rv of g.rivers) { if (isLake(rv)) { fillPoly(rv, theme.riverBank); drawPath(ctx, rv, theme.riverBank, 10); } else drawPath(ctx, rv, theme.riverBank, CFG.riverWidth); }
+    for (const rv of g.rivers) { if (isLake(rv)) fillPoly(rv, theme.river); else drawPath(ctx, rv, theme.river, CFG.riverWidth - 10); }
     // tunnel marks under lines
     if (hasRivers(g)) for (const line of g.lines) for (const cr of riverCrossings(g, line.path)) tunnelMark(ctx, cr);
     // placement halos
