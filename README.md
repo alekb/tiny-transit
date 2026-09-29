@@ -14,7 +14,7 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 - **Twin Rivers**: two rivers, three banks, four tunnels to start.
 - **Dry Basin**: no water, but stations arrive faster and crowds run heavier.
 - **Normal**: a crowded station ends the run. **Endless**: no game over, overflowing passengers give up and leave, end the run yourself for the recap. **Extreme**: lines only grow (no retracting, removing, bypassing or opening loops).
-- **Today's daily**: the same seeded map for everyone, chosen from the date. Every other run is a fresh seed; the seed is shown in the recap so a map can be described.
+- **Today's daily**: the same seeded map for everyone, chosen from the UTC date. It is laid out on a fixed reference map and fitted to your screen (turned on its side in portrait), and the stations that appear do not depend on how you play. Every other run is a fresh seed; the seed is shown in the recap so a map can be described.
 
 ## How to play
 
@@ -27,6 +27,7 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 - **Crowding**: more than 6 waiting passengers (12 at an interchange) starts a red ring, with a ripple the moment it begins. When the ring closes, the game ends. Interchanges also halve stopping time.
 - **Every Monday** you receive a locomotive and choose one upgrade: a new line, a carriage (+6 seats, tap the train you want it on), an interchange, or two tunnels. A new locomotive joins its line where the gap between trains is widest.
 - **Recap**: the end card shows the top line, the busiest station, the longest and average wait, and your best for that city and mode.
+- **Keep in depot** during placement skips just that item and moves on to the next one; tap its token in the tray to place it later.
 - Keys: `Space` pause, `1` / `2` speed, `Esc` cancel placement. Sound can be muted from the top bar.
 
 ## Notes

@@ -302,7 +302,10 @@
     extreme: { name: 'Extreme', desc: 'Lines only grow. No retracting, removing, bypassing or opening loops.' },
   };
   const PAD = { top: 84, side: 24 };
-  const padBottom = () => (W < 600 ? 170 : 130);
+  const padBottomFor = (w) => (w < 600 ? 170 : 130);
+  const padBottom = () => padBottomFor(W);
+  // The daily is generated on this fixed layout so every screen gets the same map, fitted to its play area.
+  const REF = { W: 1280, H: 800 };
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
@@ -334,6 +337,7 @@
   let pairSlots = new Map();
   let pick = { city: 'riverside', mode: 'normal' };
   let helpFrom = null;
+  let fontFamily = 'sans-serif';
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : v; } catch (e) { return d; } },
@@ -343,13 +347,14 @@
   const bestFor = (g) => parseInt(store.get(bestKey(g), '0'), 10) || 0;
 
   // ---------- seeded randomness ----------
-  function rng(g) {
-    let t = (g.rngState = (g.rngState + 0x6D2B79F5) | 0);
+  // Separate streams keep the map (rngState) independent of passenger (paxState) and reward (rewardState) draws.
+  function rng(g, k = 'rngState') {
+    let t = (g[k] = (g[k] + 0x6D2B79F5) | 0);
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
-  const todaySeed = () => { const d = new Date(); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+  const todaySeed = () => { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); };
   const dailyCity = (seed) => Object.keys(CITIES)[seed % 3];
   const seedLabel = (g) => (g.daily ? `Daily ${String(g.seed % 100).padStart(2, '0')} ${MONTHS[Math.floor(g.seed / 100) % 100 - 1]}` : `seed ${g.seed}`);
 
@@ -386,27 +391,41 @@
 
   // ---------- state ----------
   function newGame(city, mode, seed, daily) {
+    // Stations and rivers live in `ref` coordinates (rx/ry, riversRef); x/y and rivers are their on-screen projection.
+    const ref = daily ? { W: REF.W, H: REF.H, pb: padBottomFor(REF.W), transpose: W < H } : { W, H, pb: padBottom(), transpose: false };
     const g = {
-      city, mode, seed, daily: !!daily, rngState: seed | 0,
+      city, mode, seed, daily: !!daily, rngState: seed | 0, paxState: (seed ^ 0x5bd1e995) | 0, rewardState: (seed ^ 0x27d4eb2d) | 0, ref,
       t: 0, day: 0, week: 1, score: 0, dayDelivered: 0, lastDayIdx: 0, over: false, paused: false, speed: 1, started: false,
-      stations: [], lines: [], trains: [], floats: [], rivers: [], nextId: 1,
+      stations: [], lines: [], trains: [], floats: [], rivers: [], riversRef: [], nextId: 1,
       linesAvail: CFG.startLines, linesTotal: CFG.startLines, locosAvail: CFG.startLines, carriagesAvail: 0, interchangesAvail: 0,
       tunnelsTotal: CITIES[city].tunnels, tunnelsUsed: 0,
-      spawnAcc: 0, stationTimer: 0, rareUsed: [], placing: null, placeQueue: [], modal: null,
+      spawnAcc: 0, nextStationAt: 0, rareUsed: [], placing: null, placeQueue: [], modal: null, rewardChoices: null,
       selectedLine: null, everDrew: false, failedStation: null,
       stats: { byLine: {}, boardings: {}, longestWait: 0, waitSum: 0, waitN: 0, gaveUp: 0 },
       rides: null, linesAt: null,
     };
-    for (let i = 0; i < CITIES[city].rivers; i++) g.rivers.push(makeRiver(g, i, CITIES[city].rivers));
-    for (let i = 0; i < 3; i++) addStation(g);
-    g.stationTimer = 14 / CITIES[city].stationRate;
+    for (let i = 0; i < CITIES[city].rivers; i++) g.riversRef.push(makeRiver(g, i, CITIES[city].rivers));
+    syncScreen(g);
+    for (let i = 0; i < 3; i++) addStation(g, 0);
+    g.nextStationAt = 14 / CITIES[city].stationRate;
+    g.best = bestFor(g);
     return g;
+  }
+  function toScreen(g, p) {
+    const r = g.ref;
+    const u = (p.x - PAD.side) / Math.max(1, r.W - 2 * PAD.side), v = (p.y - PAD.top) / Math.max(1, r.H - PAD.top - r.pb);
+    const a = r.transpose ? v : u, b = r.transpose ? u : v;
+    return { x: PAD.side + a * Math.max(1, W - 2 * PAD.side), y: PAD.top + b * Math.max(1, H - PAD.top - padBottom()) };
+  }
+  function syncScreen(g) {
+    for (const st of g.stations) { const p = toScreen(g, { x: st.rx, y: st.ry }); st.x = p.x; st.y = p.y; }
+    g.rivers = g.riversRef.map((rv) => rv.map((p) => toScreen(g, p)));
   }
   const uid = (g) => g.nextId++;
   const stationById = (g, id) => g.stations.find((s) => s.id === id);
   const lineById = (g, id) => g.lines.find((l) => l.id === id);
   const capOf = (st) => (st.interchange ? CFG.interchangeCap : CFG.stationCap);
-  const hasRivers = (g) => g.rivers.length > 0;
+  const hasRivers = (g) => g.riversRef.length > 0;
   const tunnelsAvail = (g) => g.tunnelsTotal - g.tunnelsUsed;
   function bump(g) { g.rides = null; }
 
@@ -432,15 +451,17 @@
 
   // ---------- rivers ----------
   function makeRiver(g, k, count) {
-    const horizontal = W >= H;
-    const span = horizontal ? W : H, across = horizontal ? H : W;
-    const lo = horizontal ? PAD.top : PAD.side, hi = horizontal ? H - padBottom() : W - PAD.side;
+    const { W: rw, H: rh, pb } = g.ref;
+    const horizontal = rw >= rh;
+    const span = horizontal ? rw : rh;
+    const lo = horizontal ? PAD.top : PAD.side, hi = horizontal ? rh - pb : rw - PAD.side;
     const usable = hi - lo;
     const base = count === 1 ? 0.5 + (rng(g) - 0.5) * 0.24 : (k === 0 ? 0.33 : 0.67) + (rng(g) - 0.5) * 0.08;
-    let pos = -40, off = lo + base * usable;
+    // run well past the edges so the river still reaches them when the map is fitted to a different screen
+    let pos = -400, off = lo + base * usable;
     const pt = (p, o) => (horizontal ? { x: p, y: o } : { x: o, y: p });
     const pts = [pt(pos, off)];
-    while (pos < span + 40) {
+    while (pos < span + 400) {
       pos += 90 + rng(g) * 150; pts.push(pt(pos, off));
       const diag = 30 + rng(g) * 70, dir = rng(g) < 0.5 ? -1 : 1;
       const target = Math.max(lo + usable * 0.15, Math.min(hi - usable * 0.15, off + dir * diag));
@@ -456,14 +477,15 @@
   }
   function polyCrossings(g, pts) {
     let n = 0;
-    for (const rv of g.rivers) for (let i = 1; i < pts.length; i++) for (let j = 1; j < rv.length; j++) if (segIntersect(pts[i - 1], pts[i], rv[j - 1], rv[j])) n++;
+    for (const rv of g.riversRef) for (let i = 1; i < pts.length; i++) for (let j = 1; j < rv.length; j++) if (segIntersect(pts[i - 1], pts[i], rv[j - 1], rv[j])) n++;
     return n;
   }
+  // Counted on the reference layout, so resizing the window never changes how many tunnels are in use.
   function pairCrossings(g, aId, bId) {
     if (!hasRivers(g)) return 0;
     const a = stationById(g, aId), b = stationById(g, bId);
     const lo = aId < bId ? a : b, hi = aId < bId ? b : a;
-    return polyCrossings(g, octiPts({ x: lo.x, y: lo.y }, { x: hi.x, y: hi.y }));
+    return polyCrossings(g, octiPts({ x: lo.rx, y: lo.ry }, { x: hi.rx, y: hi.ry }));
   }
   function countTunnels(g) {
     let n = 0;
@@ -480,7 +502,7 @@
   }
   function refuseTunnel() { flash('No tunnels left for that crossing. Two more come as a weekly reward.', 4); }
   function nearRiver(g, x, y, d) {
-    for (const rv of g.rivers) for (let j = 1; j < rv.length; j++) if (segDist(x, y, rv[j - 1], rv[j]) < d) return true;
+    for (const rv of g.riversRef) for (let j = 1; j < rv.length; j++) if (segDist(x, y, rv[j - 1], rv[j]) < d) return true;
     return false;
   }
 
@@ -489,45 +511,49 @@
     for (const line of g.lines) for (let i = 1; i < line.path.length; i++) if (segDist(x, y, line.path[i - 1], line.path[i]) < d) return true;
     return false;
   }
-  function placeStation(g) {
-    const f = 0.34 + 0.66 * Math.min(1, g.day / 28);
-    const bottom = H - padBottom();
-    const cx = W / 2, cy = (PAD.top + bottom) / 2;
-    const rx = Math.max(40, (W / 2 - PAD.side) * f), ry = Math.max(40, ((bottom - PAD.top) / 2) * f);
+  // `sday` is the scheduled spawn day, not the frame-dependent clock, so the daily's map stream stays in step for everyone.
+  function placeStation(g, sday) {
+    const f = 0.34 + 0.66 * Math.min(1, sday / 28);
+    const { W: rw, H: rh, pb } = g.ref;
+    const bottom = rh - pb;
+    const cx = rw / 2, cy = (PAD.top + bottom) / 2;
+    const rx = Math.max(40, (rw / 2 - PAD.side) * f), ry = Math.max(40, ((bottom - PAD.top) / 2) * f);
     for (let i = 0; i < 120; i++) {
       const x = cx + (rng(g) * 2 - 1) * rx, y = cy + (rng(g) * 2 - 1) * ry;
       const minD = i < 60 ? 95 : 72;
-      if (g.stations.some((s) => Math.hypot(s.x - x, s.y - y) < minD)) continue;
+      if (g.stations.some((s) => Math.hypot(s.rx - x, s.ry - y) < minD)) continue;
       if (nearRiver(g, x, y, CFG.riverClear)) continue;
-      if (i < 90 && nearAnyLine(g, x, y, 30)) continue;
+      // steering clear of drawn lines depends on the player, so the daily skips it
+      if (!g.daily && i < 90) { const sp = toScreen(g, { x, y }); if (nearAnyLine(g, sp.x, sp.y, 30)) continue; }
       return { x, y };
     }
     return null;
   }
-  function pickShape(g) {
+  function pickShape(g, sday) {
     const n = g.stations.length;
     if (n < 3) return COMMON[n];
     const rareLeft = RARE.filter((s) => !g.rareUsed.includes(s));
-    if (g.day >= 2.5 && rareLeft.length && rng(g) < 0.16) {
+    if (sday >= 2.5 && rareLeft.length && rng(g) < 0.16) {
       const s = rareLeft[Math.floor(rng(g) * rareLeft.length)]; g.rareUsed.push(s); return s;
     }
     const r = rng(g);
     return r < 0.5 ? 'circle' : r < 0.8 ? 'triangle' : 'square';
   }
-  function addStation(g) {
-    const p = placeStation(g);
+  function addStation(g, sday) {
+    const p = placeStation(g, sday);
     if (!p) return null;
-    const st = { id: uid(g), x: p.x, y: p.y, shape: pickShape(g), passengers: [], over: 0, warnAt: -9, interchange: false, born: g.t };
+    const sp = toScreen(g, p);
+    const st = { id: uid(g), rx: p.x, ry: p.y, x: sp.x, y: sp.y, shape: pickShape(g, sday), passengers: [], over: 0, warnAt: -9, interchange: false, born: g.t };
     g.stations.push(st); bump(g);
     return st;
   }
   function spawnPassenger(g) {
-    const st = g.stations[Math.floor(rng(g) * g.stations.length)];
+    const st = g.stations[Math.floor(rng(g, 'paxState') * g.stations.length)];
     const shapes = [...new Set(g.stations.filter((s) => s.shape !== st.shape).map((s) => s.shape))];
     if (!shapes.length) return;
     // rare shapes pull demand from the whole map
     const weights = shapes.map((s) => (RARE.includes(s) ? 2.5 : 1));
-    let r = rng(g) * weights.reduce((a, b) => a + b, 0), dest = shapes[0];
+    let r = rng(g, 'paxState') * weights.reduce((a, b) => a + b, 0), dest = shapes[0];
     for (let i = 0; i < shapes.length; i++) { r -= weights[i]; if (r <= 0) { dest = shapes[i]; break; } }
     st.passengers.push({ d: dest, born: g.t });
   }
@@ -578,16 +604,19 @@
     for (const line of g.lines) rebuildPath(g, line);
     countTunnels(g);
   }
+  // Reads the station order the current path was built from: callers edit line.stations before rebuilding,
+  // and stationDist only matches the old order until rebuildPath replaces it.
   function locate(line, tr) {
-    const N = line.stations.length, sd = line.stationDist;
+    const stations = line.pathStations || line.stations, loop = line.pathStations ? line.pathLoop : line.loop;
+    const N = stations.length, sd = line.stationDist;
     if (!sd || !sd.length) return null;
     for (let i = 0; i < N; i++) {
       const a = sd[i];
-      const b = i === N - 1 ? (line.loop ? line.total : null) : sd[i + 1];
-      if (b === null) return { from: line.stations[i], to: null, frac: 0 };
-      if (tr.dist >= a - 0.01 && tr.dist <= b + 0.01) return { from: line.stations[i], to: line.stations[(i + 1) % N], frac: b - a > 0 ? (tr.dist - a) / (b - a) : 0 };
+      const b = i === N - 1 ? (loop ? line.total : null) : sd[i + 1];
+      if (b === null) return { from: stations[i], to: null, frac: 0 };
+      if (tr.dist >= a - 0.01 && tr.dist <= b + 0.01) return { from: stations[i], to: stations[(i + 1) % N], frac: b - a > 0 ? (tr.dist - a) / (b - a) : 0 };
     }
-    return { from: line.stations[N - 1], to: null, frac: 0 };
+    return { from: stations[N - 1], to: null, frac: 0 };
   }
   function restore(line, tr, loc) {
     const N = line.stations.length, sd = line.stationDist;
@@ -619,6 +648,7 @@
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
     line.path = pts; line.cum = cum; line.sIdx = sIdx; line.total = cum[cum.length - 1];
     line.stationDist = sIdx.slice(0, N).map((i) => cum[i]);
+    line.pathStations = line.stations.slice(); line.pathLoop = line.loop;
     for (const { tr, loc } of snaps) restore(line, tr, loc);
   }
   function pointAt(line, dist) {
@@ -752,11 +782,11 @@
     const rate = (0.2 + 0.014 * g.day + 0.02 * g.stations.length + 0.02 * late) * city.passengerRate;
     g.spawnAcc += rate * dt;
     while (g.spawnAcc >= 1) { g.spawnAcc -= 1; if (g.t > 2) spawnPassenger(g); }
-    g.stationTimer -= dt;
-    if (g.stationTimer <= 0) {
-      addStation(g);
-      const floor = g.day < 21 ? 11 : 8;
-      g.stationTimer = (Math.max(floor, 26 - g.day * 1.1) / city.stationRate) * (0.85 + rng(g) * 0.3);
+    if (g.t >= g.nextStationAt) {
+      const sday = g.nextStationAt / CFG.dayLength;
+      addStation(g, sday);
+      const floor = sday < 21 ? 11 : 8;
+      g.nextStationAt += (Math.max(floor, 26 - sday * 1.1) / city.stationRate) * (0.85 + rng(g) * 0.3);
     }
     for (const tr of g.trains) updateTrain(g, tr, dt);
     for (const f of g.floats) f.t += dt;
@@ -800,7 +830,7 @@
     ui.overDays.textContent = Math.floor(g.day);
     ui.overStations.textContent = g.stations.length;
     const prev = bestFor(g), isBest = g.score > prev;
-    if (isBest) store.set(bestKey(g), g.score);
+    if (isBest) { store.set(bestKey(g), g.score); g.best = g.score; }
     ui.overBest.textContent = Math.max(prev, g.score); ui.overBest.classList.toggle('dim', !isBest);
     ui.overBestLbl.textContent = isBest ? 'new best' : 'best';
     // recap
@@ -817,27 +847,37 @@
   }
   const gameOver = (g, st) => finishRun(g, st);
 
+  const rewardDefs = () => ({
+    line: { t: 'New line', d: `Another route to draw. The city plan allows ${CFG.maxLines}.`, ic: '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M4 17 L10 11 L20 11" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
+    carriage: { t: 'Carriage', d: 'Adds 6 seats to one train. Tap the train you want it on.', ic: TOKEN_SVG.carriage },
+    interchange: { t: 'Interchange', d: 'One station waits 12 instead of 6 and trains stop there in half the time.', ic: TOKEN_SVG.interchange },
+    tunnel: { t: 'Tunnels', d: 'Two more river crossings for your lines.', ic: TOKEN_SVG.tunnel },
+  });
   function offerReward(g) {
     g.modal = 'reward'; g.selectedLine = null; sfx.week();
-    ui.rewardEyebrow.textContent = `Monday · Week ${g.week - 1} complete`;
     const pool = [];
-    if (g.linesTotal < CFG.maxLines) pool.push({ k: 'line', t: 'New line', d: `Another route to draw. The city plan allows ${CFG.maxLines}.`, ic: '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M4 17 L10 11 L20 11" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>' });
-    pool.push({ k: 'carriage', t: 'Carriage', d: 'Adds 6 seats to one train. Tap the train you want it on.', ic: TOKEN_SVG.carriage });
-    pool.push({ k: 'interchange', t: 'Interchange', d: 'One station waits 12 instead of 6 and trains stop there in half the time.', ic: TOKEN_SVG.interchange });
-    if (hasRivers(g)) pool.push({ k: 'tunnel', t: 'Tunnels', d: 'Two more river crossings for your lines.', ic: TOKEN_SVG.tunnel });
-    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng(g) * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    if (g.linesTotal < CFG.maxLines) pool.push('line');
+    pool.push('carriage', 'interchange');
+    if (hasRivers(g)) pool.push('tunnel');
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rng(g, 'rewardState') * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    g.rewardChoices = pool.slice(0, 2);
+    showReward(g);
+  }
+  function showReward(g) {
+    const defs = rewardDefs();
+    ui.rewardEyebrow.textContent = `Monday · Week ${g.week - 1} complete`;
     ui.choices.innerHTML = '';
-    for (const c of pool.slice(0, 2)) {
-      const b = document.createElement('button');
+    for (const k of g.rewardChoices) {
+      const c = defs[k], b = document.createElement('button');
       b.className = 'choice'; b.type = 'button';
       b.innerHTML = `<span class="ic">${c.ic}</span><strong>${c.t}</strong><span>${c.d}</span>`;
-      b.addEventListener('click', () => chooseReward(g, c.k));
+      b.addEventListener('click', () => chooseReward(g, k));
       ui.choices.appendChild(b);
     }
     ui.rewardOv.hidden = false;
   }
   function chooseReward(g, k) {
-    ui.rewardOv.hidden = true; g.modal = null;
+    ui.rewardOv.hidden = true; g.modal = null; g.rewardChoices = null;
     g.locosAvail++;
     g.placeQueue.push('loco');
     if (k === 'line') { g.linesAvail++; g.linesTotal++; flash(`${LINE_NAMES[availableColors(g).slice(-1)[0]] || 'A new'} line is ready in the tray.`, 5); }
@@ -849,11 +889,16 @@
   const PLACE_TEXT = { loco: 'Tap a line for the locomotive', carriage: 'Tap a train for the carriage', interchange: 'Tap a station to make it an interchange' };
   function nextPlacement(g) {
     const avail = { loco: g.locosAvail, carriage: g.carriagesAvail, interchange: g.interchangesAvail };
-    while (g.placeQueue.length && !avail[g.placeQueue[0]]) g.placeQueue.shift();
-    if (!g.placeQueue.length) { g.placing = null; ui.banner.hidden = true; renderHud(); return; }
-    g.placing = g.placeQueue.shift();
-    if (g.placing === 'loco' && !g.lines.length) { g.placing = null; ui.banner.hidden = true; flash('The locomotive waits in the depot until you draw a line.', 5); renderHud(); return; }
-    if (g.placing === 'carriage' && !g.trains.length) { g.placing = null; ui.banner.hidden = true; flash('The carriage waits in the depot until a train is running.', 5); renderHud(); return; }
+    g.placing = null;
+    // items with no valid target stay in the depot; keep going so the rest of the queue is still offered
+    while (g.placeQueue.length) {
+      const k = g.placeQueue.shift();
+      if (!avail[k]) continue;
+      if (k === 'loco' && !g.lines.length) { flash('The locomotive waits in the depot until you draw a line.', 5); continue; }
+      if (k === 'carriage' && !g.trains.length) { flash('The carriage waits in the depot until a train is running.', 5); continue; }
+      g.placing = k; break;
+    }
+    if (!g.placing) { ui.banner.hidden = true; renderHud(); return; }
     g.selectedLine = null;
     ui.bannerText.textContent = PLACE_TEXT[g.placing];
     ui.banner.hidden = false; renderHud();
@@ -963,8 +1008,12 @@
     if (h) drag = { mode: 'insert', line: h.line, seg: stationSegOfPathSeg(h.line, h.seg) };
     renderHud();
     pressPos = { x, y };
-    clearTimeout(pressTimer);
-    pressTimer = setTimeout(() => { pressTimer = null; drag = null; breakLoopAt(x, y); }, 550);
+    clearTimeout(pressTimer); pressTimer = null;
+    // long-press only means something on a loop; elsewhere it must not cancel a slow segment drag
+    if (h && h.line.loop) {
+      const g0 = G;
+      pressTimer = setTimeout(() => { pressTimer = null; if (G !== g0 || !interactive()) return; drag = null; breakLoopAt(x, y); }, 550);
+    }
   }
   function onMove(x, y) {
     pointer = { x, y };
@@ -1055,8 +1104,9 @@
     line.loop = false; rebuildAll(G); bump(G);
     flash('Loop opened.', 2);
   }
+  const overlayOpen = () => !ui.startOv.hidden || !ui.rewardOv.hidden || !ui.overOv.hidden || !ui.helpOv.hidden;
   window.addEventListener('keydown', (e) => {
-    if (!G || !G.started) return;
+    if (!G || !G.started || overlayOpen()) return;
     if (e.code === 'Space') { e.preventDefault(); togglePause(); }
     if (e.key === '1') setSpeed(1);
     if (e.key === '2') setSpeed(2);
@@ -1077,14 +1127,14 @@
   ui.btnSpeed2.addEventListener('click', () => setSpeed(2));
   ui.btnEnd.addEventListener('click', () => { if (G && !G.over) finishRun(G, null); });
   ui.btnSound.addEventListener('click', () => { audio.muted = !audio.muted; store.set('tt_muted', audio.muted ? '1' : '0'); renderSoundBtn(); if (!audio.muted) { unlockAudio(); sfx.place(); } });
-  ui.btnHelp.addEventListener('click', () => { if (!G) return; helpFrom = G.started ? 'game' : 'start'; G.modal = 'help'; ui.helpOv.hidden = false; });
+  ui.btnHelp.addEventListener('click', () => { if (!G || G.modal) return; helpFrom = G.started ? 'game' : 'start'; G.modal = 'help'; ui.helpOv.hidden = false; });
   ui.btnRules.addEventListener('click', () => { helpFrom = 'start'; ui.startOv.hidden = true; ui.helpOv.hidden = false; });
-  ui.btnHelpClose.addEventListener('click', () => { ui.helpOv.hidden = true; if (helpFrom === 'start') ui.startOv.hidden = false; if (G) G.modal = null; });
+  ui.btnHelpClose.addEventListener('click', () => { ui.helpOv.hidden = true; if (helpFrom === 'start') ui.startOv.hidden = false; if (G && G.modal === 'help') G.modal = null; });
   ui.btnStart.addEventListener('click', () => { unlockAudio(); launch(pick.city, pick.mode, (Math.random() * 1e9) | 0, false); });
   ui.btnDaily.addEventListener('click', () => { unlockAudio(); const s = todaySeed(); launch(dailyCity(s), 'normal', s, true); });
   ui.btnAgain.addEventListener('click', () => { launch(G.city, G.mode, G.daily ? G.seed : (Math.random() * 1e9) | 0, G.daily); });
   ui.btnMenu.addEventListener('click', () => { ui.overOv.hidden = true; ui.startOv.hidden = false; G.started = false; renderStart(); });
-  ui.btnLater.addEventListener('click', () => { stopPlacement(G); flash('Kept in the depot. Tap a token in the tray to place it later.', 4); });
+  ui.btnLater.addEventListener('click', () => { nextPlacement(G); flash('Kept in the depot. Tap a token in the tray to place it later.', 4); });
   ui.btnRemoveLine.addEventListener('click', () => {
     const line = lineById(G, G.selectedLine); if (!line) return;
     if (extreme(G)) { refuseExtreme(); return; }
@@ -1203,7 +1253,7 @@
   function renderHud() {
     const g = G; if (!g) return;
     ui.score.textContent = g.score;
-    ui.scoreSub.textContent = `${g.dayDelivered} today · best ${Math.max(bestFor(g), g.score)} · ${CITIES[g.city].name}${g.daily ? ' daily' : g.mode !== 'normal' ? ' ' + MODES[g.mode].name.toLowerCase() : ''}`;
+    ui.scoreSub.textContent = `${g.dayDelivered} today · best ${Math.max(g.best || 0, g.score)} · ${CITIES[g.city].name}${g.daily ? ' daily' : g.mode !== 'normal' ? ' ' + MODES[g.mode].name.toLowerCase() : ''}`;
     const dayIdx = Math.floor(g.day) % 7, frac = g.day - Math.floor(g.day);
     ui.clock.style.background = `conic-gradient(var(--ink) ${Math.round(frac * 360)}deg, transparent 0deg)`;
     ui.dayname.textContent = DAYS[dayIdx];
@@ -1219,6 +1269,7 @@
     const cs = getComputedStyle(document.documentElement);
     const v = (n, d) => cs.getPropertyValue(n).trim() || d;
     theme = { ink: v('--ink', '#1f1e1b'), bg: v('--bg', '#f4f3ee'), muted: v('--muted', '#6f6c64'), warn: v('--warn', '#d9412b'), river: v('--river', '#cfdfe9'), river2: v('--river2', '#e2edf3') };
+    fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif';
   }
   function shapePath(c, shape, x, y, r) {
     c.beginPath();
@@ -1245,7 +1296,7 @@
   }
   function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   function label(c, text, x, y) {
-    c.save(); c.font = '500 14px ' + getComputedStyle(document.body).fontFamily;
+    c.save(); c.font = '500 14px ' + fontFamily;
     const w = c.measureText(text).width + 24, h = 34;
     c.fillStyle = theme.ink; roundRect(c, x - w / 2, y - h, w, h, 9); c.fill();
     c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x, y + 7); c.lineTo(x + 6, y); c.closePath(); c.fill();
@@ -1350,33 +1401,26 @@
       if (st.passengers.length > 8) {
         const bx = st.x + r + 8, by = st.y - r - 8;
         ctx.fillStyle = theme.warn; ctx.beginPath(); ctx.arc(bx, by, 10, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#ffffff'; ctx.font = '700 12px ' + getComputedStyle(document.body).fontFamily; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(st.passengers.length), bx, by + 0.5);
+        ctx.fillStyle = '#ffffff'; ctx.font = '700 12px ' + fontFamily; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(st.passengers.length), bx, by + 0.5);
       }
       ctx.restore();
     }
     // delivery floats
     for (const f of g.floats) {
       ctx.save(); ctx.globalAlpha = Math.max(0, 1 - f.t / 1.2) * 0.7; ctx.fillStyle = theme.ink;
-      ctx.font = '600 15px ' + getComputedStyle(document.body).fontFamily; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '600 15px ' + fontFamily; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(f.text, f.x, f.y - 26 * f.t); ctx.restore();
     }
   }
 
   // ---------- resize ----------
   function resize() {
-    const nw = window.innerWidth, nh = window.innerHeight;
-    if (G && W && H && (nw !== W || nh !== H)) {
-      const ob = padBottom();
-      const sx = (nw - 2 * PAD.side) / Math.max(1, W - 2 * PAD.side), sy = (nh - PAD.top - ob) / Math.max(1, H - PAD.top - ob);
-      const map = (p) => { p.x = PAD.side + (p.x - PAD.side) * sx; p.y = PAD.top + (p.y - PAD.top) * sy; };
-      for (const st of G.stations) map(st);
-      for (const rv of G.rivers) for (const p of rv) map(p);
-    }
-    W = nw; H = nh; DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = window.innerWidth; H = window.innerHeight; DPR = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    if (G) rebuildAll(G);
+    // positions are re-projected from the game's reference layout, so repeated resizes never drift
+    if (G) { syncScreen(G); rebuildAll(G); }
   }
   window.addEventListener('resize', resize);
 
@@ -1403,10 +1447,14 @@
   document.querySelector('.swatches').innerHTML = LINE_COLORS.map((c) => `<i style="background:${c}"></i>`).join('');
 
   // ---------- main loop ----------
+  const hudEl = $('hud'), bottomEl = $('bottom');
   let last = performance.now();
   function frame(now) {
     const raw = Math.min(0.05, (now - last) / 1000); last = now;
     if (now - themeAt > 1000) { readTheme(); themeAt = now; }
+    // keep keyboard focus out of the HUD and tray while a card covers them
+    const blocked = overlayOpen();
+    if (hudEl.inert !== blocked) { hudEl.inert = blocked; bottomEl.inert = blocked; }
     if (G && G.started && !G.over && !G.paused && !G.modal && !G.placing) tick(G, raw * G.speed);
     if (G) { renderHud(); draw(); }
     requestAnimationFrame(frame);
@@ -1415,11 +1463,18 @@
     resize(); readTheme(); renderSoundBtn(); renderStart();
     if (data && data.G && data.G.stations && data.G.city) {
       G = Object.assign({ floats: [], selectedLine: null, everDrew: true, failedStation: null, dayDelivered: 0, lastDayIdx: 0 }, data.G); G.rides = null; G.linesAt = null;
-      rebuildAll(G);
+      // snapshots from before the reference layout: adopt the current screen as the reference
+      if (!G.ref) { G.ref = { W, H, pb: padBottom(), transpose: false }; for (const st of G.stations) { st.rx = st.x; st.ry = st.y; } G.riversRef = G.rivers || []; }
+      if (G.nextStationAt == null) G.nextStationAt = G.t + (G.stationTimer || 0);
+      if (G.paxState == null) G.paxState = (G.seed ^ 0x5bd1e995) | 0;
+      if (G.rewardState == null) G.rewardState = (G.seed ^ 0x27d4eb2d) | 0;
+      if (G.best == null) G.best = bestFor(G);
+      syncScreen(G); rebuildAll(G);
       ui.startOv.hidden = !!G.started;
       ui.overOv.hidden = !G.over;
       ui.btnEnd.hidden = G.mode !== 'zen';
-      if (G.modal === 'reward') offerReward(G);
+      if (G.modal === 'reward') { if (G.rewardChoices) showReward(G); else offerReward(G); }
+      else if (G.modal === 'help') G.modal = null;
       if (G.placing) { ui.bannerText.textContent = PLACE_TEXT[G.placing]; ui.banner.hidden = false; }
       ui.btnPause.textContent = G.paused ? 'Resume' : 'Pause';
       setSpeed(G.speed || 1);
