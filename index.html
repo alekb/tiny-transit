@@ -109,6 +109,18 @@
   #bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: 0 24px calc(env(safe-area-inset-bottom, 0px) + 20px); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
   #bottom > * { pointer-events: auto; }
   .trayw { width: min(920px, 100%); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  /* The legend and tray are the only things that take up room, so the map is fitted to a height that never changes.
+     Toasts, the placement banner and Remove line sit out of flow in a slot kept clear of stations: a strip above
+     the tray on wide screens, the coach row itself on phones. */
+  #trayBox { --slot: 26px; position: relative; width: 100%; display: flex; flex-direction: column; gap: 8px; padding-top: var(--slot); }
+  #transients { position: absolute; left: 0; right: 0; bottom: calc(100% - var(--slot) + 8px); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none; }
+  #transients > * { pointer-events: auto; }
+  #lineOwners { display: flex; gap: 8px; width: 100%; font: 600 12px var(--font); }
+  .line-owner { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 7px 10px; background: var(--owner-tint); border: 1px solid var(--divider); }
+  .line-owner .owner-route { width: 26px; border-top: 4px solid var(--ink); flex-shrink: 0; }
+  .line-owner.partner .owner-route { border-top-style: dashed; }
+  .line-owner .owner-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line-owner b { margin-left: auto; white-space: nowrap; }
   #toasts { display: flex; flex-direction: column-reverse; gap: 6px; align-items: flex-start; pointer-events: none; min-height: 0; }
   .toast { display: inline-flex; align-items: center; gap: 8px; background: var(--ink); color: var(--bg); font: 600 14px var(--font); padding: 10px 14px; pointer-events: none; }
   .toast .chip { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font: 800 11px var(--font); color: var(--on-line); }
@@ -244,7 +256,7 @@
   #overOv.side { align-items: stretch; justify-content: flex-start; padding: 64px 24px; }
   #overOv.side.right { justify-content: flex-end; }
   #overOv.side .card { overflow: auto; }
-  .pill.drawn.partner { opacity: 0.55; }
+  .pill.drawn.partner { background-image: repeating-linear-gradient(90deg, var(--on-line) 0 6px, transparent 6px 12px); background-size: 100% 3px; background-repeat: no-repeat; background-position: bottom; }
   .choice:disabled { opacity: 0.5; cursor: default; }
   .choice:disabled:hover { background: transparent; }
   @media (prefers-reduced-motion: no-preference) {
@@ -269,17 +281,29 @@
     .hud-right { gap: 8px; }
     .seg, #btnEnd, #btnSound, #btnHelp { display: none; }
     #menuBtn { display: inline-flex; }
-    #bottom { padding-left: 12px; padding-right: 12px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
+    #bottom { padding-left: 12px; padding-right: 12px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
+    /* Three rows of fixed height (56 + 54 + 58 with their rules, 172 with the border), so the tray never grows. */
+    #trayBox { --slot: 0px; }
     #tray { height: auto; flex-direction: column; }
     .cell + .cell { border-left: 0; border-top: 2px solid var(--divider); }
-    .cell { flex-direction: row; align-items: center; gap: 12px; padding: 8px 12px; }
-    .cell.coach { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .cell { flex-direction: row; align-items: center; gap: 12px; padding: 0 12px; height: 54px; }
+    .cell.coach { flex: 0 0 56px; height: 56px; justify-content: flex-start; }
+    .cell:last-child { height: 58px; }
+    .cell.coach .lbl { display: none; }
+    #coachText { font-size: 13px; }
+    #trayBox.has-remove .cell.coach { padding-right: 136px; }
     .cell .lbl { width: 44px; flex-shrink: 0; font-size: 10px; }
-    .pills { overflow-x: auto; scrollbar-width: none; flex: 1; }
-    .token { width: 48px; height: 44px; }
+    .pills { overflow-x: auto; scrollbar-width: none; flex: 1; padding: 4px; margin: 0 -4px; }
+    .pill { margin: 0; }
+    .token { width: 48px; height: 40px; margin: 0; }
     .budget { margin-left: auto; align-items: flex-end; border-left: 0; padding-left: 0; }
-    #banner { height: auto; min-height: 48px; padding: 8px 8px 8px 12px; font-size: 14px; flex-wrap: wrap; }
+    /* Messages take over the coach row instead of stacking on the map: 114px is the two rows beneath it. */
+    #transients { display: block; left: 2px; right: 2px; bottom: 114px; height: 56px; }
+    #toasts { position: absolute; inset: 0; z-index: 2; display: block; }
+    .toast { position: absolute; inset: 0; box-sizing: border-box; display: flex; font-size: 13px; padding: 0 12px; }
+    #banner { position: absolute; inset: 0; width: auto; height: auto; padding: 0 8px 0 12px; gap: 10px; font-size: 13px; line-height: 1.25; }
     #banner .esc { display: none; }
+    #btnRemoveLine { position: absolute; right: 8px; top: 8px; height: 40px; padding: 0 10px; font-size: 13px; }
     .page { padding: calc(env(safe-area-inset-top, 0px) + 56px) 20px 40px; }
     .start { grid-template-columns: 1fr; gap: 32px; }
     .start h1 { font-size: 44px; }
@@ -308,6 +332,24 @@
     #overOv.sheet { align-items: flex-end; padding: 0; }
     #overOv.sheet .card { border-left: 0; border-right: 0; border-bottom: 0; border-top-width: 3px; box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.25); max-height: 54%; overflow: auto; }
     @media (prefers-reduced-motion: no-preference) { #overOv.sheet .card { animation: sheetin 220ms cubic-bezier(.2,.7,.2,1); } @keyframes sheetin { from { transform: translateY(100%); } to { transform: none; } } }
+  }
+  @media (max-height: 520px) and (orientation: landscape) {
+    #bottom { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
+    #trayBox { --slot: 14px; gap: 6px; }
+    #tray { height: auto; flex-direction: row; }
+    .cell.coach { display: none; }
+    .cell:not(.coach) { flex: 1; flex-direction: row; align-items: center; padding: 4px 10px; gap: 8px; height: auto; }
+    .cell + .cell { border-top: 0; }
+    .cell:last-child { border-left: 2px solid var(--divider); height: auto; }
+    .cell > .lbl { display: none; }
+    .pills { overflow-x: auto; min-width: 0; }
+    /* no coach row here, so messages float in the strip above the tray as on wide screens */
+    #transients { display: flex; left: 0; right: 0; bottom: calc(100% - var(--slot) + 6px); height: auto; gap: 6px; }
+    #toasts { position: static; display: flex; }
+    .toast { position: static; display: inline-flex; font-size: 12px; padding: 6px 10px; }
+    #banner { position: static; width: 100%; height: auto; min-height: 40px; padding: 4px 8px; }
+    #banner .esc { display: none; }
+    #btnRemoveLine { position: static; height: 36px; }
   }
 </style>
 </head>
@@ -352,6 +394,8 @@
 
   <div id="bottom">
     <div class="trayw">
+      <div id="trayBox">
+      <div id="transients">
       <div id="toasts" aria-live="off"></div>
       <div id="banner" hidden>
         <svg id="bannerIcon" viewBox="0 0 32 20" width="30" height="18" aria-hidden="true"><rect x="2" y="3" width="28" height="14" fill="currentColor"/><circle cx="10" cy="10" r="2.5" fill="var(--ink)"/><circle cx="17" cy="10" r="2.5" fill="var(--ink)"/><circle cx="24" cy="10" r="2.5" fill="var(--ink)"/></svg>
@@ -359,12 +403,15 @@
         <span class="esc">Esc cancels</span>
         <button id="btnLater">Keep in depot</button>
       </div>
+      <button class="btn secondary" id="btnRemoveLine" hidden>Remove line</button>
+      </div>
+      <div id="lineOwners" hidden role="group" aria-label="Line ownership"></div>
       <div id="tray">
         <div class="cell coach"><span class="lbl">Coach</span><div id="coachText" aria-live="polite"></div></div>
         <div class="cell"><span class="lbl">Lines</span><div class="pills" id="pills"></div></div>
         <div class="cell"><span class="lbl">Depot</span><div class="tokens" id="tokens"></div></div>
       </div>
-      <button class="btn secondary" id="btnRemoveLine" hidden>Remove line</button>
+      </div>
     </div>
   </div>
   <div id="refusal" hidden role="alert"></div>
@@ -458,6 +505,7 @@
   const LINE_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
   const LINE_CSS = LINE_NAMES.map((l) => `var(--line-${l.toLowerCase()})`);
   const LC = (i) => (theme.dark ? LINE_DARK : LINE_LIGHT)[i];
+  const PARTNER_DASH = [18, 14];
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const CFG = {
@@ -480,9 +528,11 @@
     rivals: { name: 'Rivals', desc: 'Two players, one city. Score at your own stations.', online: true, verb: 'Find a rival', queue: 'public-rivals', cap: '4 lines each. Half the tunnels each.' },
   };
   const PAD = { top: 84, side: 24 };
-  const padBottomFor = (w) => (w < 720 ? 190 : 130);
-  const padBottom = () => padBottomFor(W);
-  const REF = { W: 1280, H: 800 };
+  // What a solo map keeps clear at the bottom: the tray's fixed height plus room for a crowding ring (see fitMapToTray).
+  const padBottomFor = (w) => (w < 720 ? 220 : 166);
+  const padBottom = () => Math.max(padBottomFor(W), mapBottomInset);
+  // The fixed layout the daily and two-player maps are generated on; its numbers never change with the UI.
+  const REF = { W: 1280, H: 800, pb: 130 };
   const isPhone = () => W < 720;
   // Fixed-step simulation. Co-op groups steps into lockstep turns; solo runs the same steps straight from the clock.
   const STEP = 1 / 60, STEPS_PER_TURN = 6, TURN_MS = 100, INPUT_DELAY = 2, SYNC_EVERY = 20;
@@ -493,8 +543,8 @@
   const ctx = canvas.getContext('2d');
   const ui = {
     score: $('score'), scoreSub: $('scoreSub'), clock: $('clock'), clockWrap: $('clockWrap'), dayname: $('dayname'), weektxt: $('weektxt'),
-    coachText: $('coachText'), btnRemoveLine: $('btnRemoveLine'), banner: $('banner'), bannerText: $('bannerText'), bannerIcon: $('bannerIcon'), toasts: $('toasts'), refusal: $('refusal'),
-    pills: $('pills'), tokens: $('tokens'), pauseFrame: $('pauseFrame'), pauseTab: $('pauseTab'), srPolite: $('srPolite'), srAssertive: $('srAssertive'),
+    coachText: $('coachText'), btnRemoveLine: $('btnRemoveLine'), trayBox: $('trayBox'), banner: $('banner'), bannerText: $('bannerText'), bannerIcon: $('bannerIcon'), toasts: $('toasts'), refusal: $('refusal'),
+    pills: $('pills'), lineOwners: $('lineOwners'), tokens: $('tokens'), pauseFrame: $('pauseFrame'), pauseTab: $('pauseTab'), srPolite: $('srPolite'), srAssertive: $('srAssertive'),
     startOv: $('startOv'), rewardOv: $('rewardOv'), overOv: $('overOv'), helpOv: $('helpOv'),
     cityPick: $('cityPick'), modePick: $('modePick'), swrow: $('swrow'), dailyName: $('dailyName'), dailyBest: $('dailyBest'), pbVal: $('pbVal'), pbWhere: $('pbWhere'), pbPhone: $('pbPhone'), footNote: $('footNote'),
     choices: $('choices'), rewardEyebrow: $('rewardEyebrow'), btnTake: $('btnTake'),
@@ -510,6 +560,7 @@
   const RELAY_URL = new URLSearchParams(location.search).get('relay') || 'wss://tiny-transit-relay.albey.workers.dev';
 
   let W = 0, H = 0, DPR = 1;
+  let mapBottomInset = 0;
   let G = null;
   let drag = null;
   let hover = null, hoverCap = null, hoverHandle = null;
@@ -648,7 +699,7 @@
     const rivals = mode === 'rivals', coop = mode === 'coop' || rivals, fixed = !!daily || coop;
     // Stations and rivers live in `ref` coordinates (rx/ry, riversRef); x/y and rivers are their on-screen projection.
     // The daily and co-op use a fixed reference layout so every screen (and both peers) gets the same map.
-    const ref = fixed ? { W: REF.W, H: REF.H, pb: padBottomFor(REF.W), transpose: W < H } : { W, H, pb: padBottom(), transpose: false };
+    const ref = fixed ? { W: REF.W, H: REF.H, pb: REF.pb, transpose: W < H } : { W, H, pb: padBottomFor(W), transpose: false };
     const startLines = coop ? CFG.coopStartLines : CFG.startLines;
     const g = {
       city, mode, seed, daily: !!daily, coop, rivals, fixed, rngState: seed | 0, paxState: (seed ^ 0x5bd1e995) | 0, rewardState: (seed ^ 0x27d4eb2d) | 0, guestRewardState: (seed ^ 0x165667b1) | 0, ref,
@@ -944,13 +995,14 @@
       return { x: p.x + n.x * off, y: p.y + n.y * off };
     });
   }
-  function segGeometry(g, line, i) {
+  function segGeometry(g, line, i, reference = false) {
     const N = line.stations.length;
     const aId = line.stations[i], bId = line.stations[(i + 1) % N];
     const a = stationById(g, aId), b = stationById(g, bId);
     const canonical = aId < bId;
     const lo = canonical ? a : b, hi = canonical ? b : a;
-    const base = octiPts({ x: lo.x, y: lo.y }, { x: hi.x, y: hi.y });
+    const pos = (st) => reference ? { x: st.rx, y: st.ry } : { x: st.x, y: st.y };
+    const base = octiPts(pos(lo), pos(hi));
     const slots = pairSlots.get(pairKey(aId, bId)) || [line.id];
     const n = slots.length, idx = Math.max(0, slots.indexOf(line.id));
     const pts = offsetPolyline(base, (idx - (n - 1) / 2) * CFG.lineGap);
@@ -998,12 +1050,11 @@
     else tr.dist = Math.max(0, Math.min(line.total, tr.dist));
     setNextStop(line, tr);
   }
-  function rebuildPath(g, line) {
-    const snaps = g.trains.filter((t) => t.lineId === line.id).map((tr) => ({ tr, loc: locate(line, tr) }));
+  function pathGeometry(g, line, reference) {
     const N = line.stations.length, segCount = line.loop ? N : N - 1;
     const pts = [], sIdx = [];
     for (let i = 0; i < segCount; i++) {
-      const sp = segGeometry(g, line, i);
+      const sp = segGeometry(g, line, i, reference);
       if (i === 0) { pts.push(sp[0]); sIdx.push(0); }
       else { const last = pts[pts.length - 1]; if (Math.hypot(last.x - sp[0].x, last.y - sp[0].y) > 0.5) pts.push(sp[0]); }
       for (let k = 1; k < sp.length; k++) pts.push(sp[k]);
@@ -1011,20 +1062,42 @@
     }
     const cum = [0];
     for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
-    line.path = pts; line.cum = cum; line.sIdx = sIdx; line.total = cum[cum.length - 1];
-    line.stationDist = sIdx.slice(0, N).map((i) => cum[i]);
-    line.pathStations = line.stations.slice(); line.pathLoop = line.loop;
-    for (const { tr, loc } of snaps) restore(line, tr, loc);
+    return { path: pts, cum, sIdx, total: cum[cum.length - 1], stationDist: sIdx.slice(0, N).map((i) => cum[i]) };
   }
-  function pointAt(line, dist) {
-    const c = line.cum, p = line.path;
+  function rebuildPath(g, line) {
+    const snaps = g.trains.filter((t) => t.lineId === line.id).map((tr) => ({ tr, loc: locate(line, tr) }));
+    const screen = pathGeometry(g, line, false), travel = pathGeometry(g, line, true);
+    const sameTravel = line.total === travel.total && line.pathLoop === line.loop && line.pathStations &&
+      line.pathStations.length === line.stations.length && line.pathStations.every((sid, i) => sid === line.stations[i]) &&
+      line.stationDist.every((d, i) => d === travel.stationDist[i]);
+    line.path = screen.path; line.cum = screen.cum; line.sIdx = screen.sIdx;
+    line.screenStationDist = screen.stationDist;
+    // Simulation distances stay on the reference map, independent of screen size and local panels.
+    line.total = travel.total; line.stationDist = travel.stationDist;
+    line.pathStations = line.stations.slice(); line.pathLoop = line.loop;
+    if (!sameTravel) for (const { tr, loc } of snaps) restore(line, tr, loc);
+  }
+  function screenDistanceAt(line, dist) {
+    const c = line.cum;
     if (line.loop) dist = ((dist % line.total) + line.total) % line.total; else dist = Math.max(0, Math.min(line.total, dist));
+    const td = line.stationDist, sd = line.screenStationDist;
+    let stop = 1;
+    while (stop < td.length && td[stop] < dist) stop++;
+    const aDist = td[stop - 1], bDist = stop < td.length ? td[stop] : line.total;
+    const aScreen = sd[stop - 1], bScreen = stop < sd.length ? sd[stop] : c[c.length - 1];
+    return aScreen + (bScreen - aScreen) * (bDist > aDist ? (dist - aDist) / (bDist - aDist) : 0);
+  }
+  function pointAtScreen(line, dist) {
+    const c = line.cum, p = line.path, total = c[c.length - 1];
+    if (line.loop) dist = ((dist % total) + total) % total; else dist = Math.max(0, Math.min(total, dist));
     let i = 1;
     while (i < c.length - 1 && c[i] < dist) i++;
     const a = p[i - 1], b = p[i], len = c[i] - c[i - 1];
     const t = len > 0 ? (dist - c[i - 1]) / len : 0;
     return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, ang: Math.atan2(b.y - a.y, b.x - a.x) };
   }
+  const pointAt = (line, dist) => pointAtScreen(line, screenDistanceAt(line, dist));
+  const trainCarPosition = (line, tr, k) => pointAtScreen(line, screenDistanceAt(line, tr.dist) - tr.dir * 34 * k);
 
   // ---------- lines ----------
   function availableColors(g, p = me) {
@@ -1513,7 +1586,7 @@
   }
   function hitTrain(g, x, y) {
     let bd = 20, bestTr = null;
-    for (const tr of g.trains) { const line = lineById(g, tr.lineId); if (!line || line.path.length < 2) continue; for (let k = 0; k < tr.cars; k++) { let d = tr.dist - tr.dir * 34 * k; if (!line.loop) d = Math.max(0, Math.min(line.total, d)); const p = pointAt(line, d); const dd = Math.hypot(p.x - x, p.y - y); if (dd < bd) { bd = dd; bestTr = tr; } } }
+    for (const tr of g.trains) { const line = lineById(g, tr.lineId); if (!line || line.path.length < 2) continue; for (let k = 0; k < tr.cars; k++) { const p = trainCarPosition(line, tr, k); const dd = Math.hypot(p.x - x, p.y - y); if (dd < bd) { bd = dd; bestTr = tr; } } }
     return bestTr;
   }
   function capPositions(g, line) {
@@ -1855,19 +1928,38 @@
   };
   const LOOP_SVG = '<svg class="loopmark" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6 a4 4 0 1 1 4 4" fill="none" stroke="var(--on-line)" stroke-width="1.8"/><path d="M4 10 L6.5 10 L6.5 7.5" fill="none" stroke="var(--on-line)" stroke-width="1.8"/></svg>';
   const TOKEN_LABEL = { loco: 'Locomotive', carriage: 'Carriage', interchange: 'Interchange' };
+  function renderLineOwners(g) {
+    ui.lineOwners.hidden = !g.coop;
+    ui.lineOwners.replaceChildren();
+    if (!g.coop) return;
+    for (const p of [me, 1 - me]) {
+      const mine = p === me, letters = colorsOf(g, p).map((i) => LINE_NAMES[i]);
+      const label = mine ? 'You' : partnerLabel(), style = mine ? 'solid' : 'dashed';
+      const el = document.createElement('div'); el.className = 'line-owner' + (mine ? '' : ' partner');
+      el.style.setProperty('--owner-tint', `var(--own-${p === 0 ? 'a' : 'b'})`);
+      el.title = `${mine ? myLabel() + ' (you)' : label}: ${style} lines ${letters.join(', ')}`;
+      el.setAttribute('aria-label', el.title);
+      el.innerHTML = '<span class="owner-route" aria-hidden="true"></span><span class="owner-name"></span><b></b>';
+      el.querySelector('.owner-name').textContent = label;
+      el.querySelector('b').textContent = `${letters[0]}-${letters[letters.length - 1]}`;
+      ui.lineOwners.appendChild(el);
+    }
+  }
   function renderTray(g) {
+    renderLineOwners(g);
     ui.pills.innerHTML = '';
     const d = depot(g), avail = availableColors(g), mine = colorsOf(g, me);
     const drawnBy = new Map(g.lines.map((l) => [l.color, l]));
     for (let i = 0; i < CFG.maxLines; i++) {
       const line = drawnBy.get(i);
       if (g.coop && !mine.includes(i)) {
-        // the partner's drawn lines sit dimmed in the tray; tapping one selects it read-only
+        // The partner's pills echo the dashed map routes; tapping one selects it read-only.
         if (!line) continue;
         const b = document.createElement('button'); b.type = 'button';
         b.className = 'pill drawn partner' + (g.selectedLine === line.id ? ' selected' : '');
         b.style.setProperty('--c', LINE_CSS[i]); b.innerHTML = LINE_NAMES[i] + (line.loop ? LOOP_SVG : '');
         b.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, ${partnerPoss()}, ${line.stations.length} stops${line.loop ? ', loop' : ''}${g.selectedLine === line.id ? ', selected' : ''}`);
+        b.title = `Line ${LINE_NAMES[i]}: ${partnerPoss()} dashed line`;
         b.setAttribute('aria-pressed', String(g.selectedLine === line.id));
         b.addEventListener('click', () => { if (!interactive()) return; selectLine(g.selectedLine === line.id ? null : line.id); });
         ui.pills.appendChild(b); continue;
@@ -1876,7 +1968,8 @@
         const b = document.createElement('button'); b.type = 'button';
         b.className = 'pill drawn' + (g.selectedLine === line.id ? ' selected' : '');
         b.style.setProperty('--c', LINE_CSS[i]); b.innerHTML = LINE_NAMES[i] + (line.loop ? LOOP_SVG : '');
-        b.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, drawn, ${line.stations.length} stops${line.loop ? ', loop' : ''}${g.selectedLine === line.id ? ', selected' : ''}`);
+        b.setAttribute('aria-label', `Line ${LINE_NAMES[i]}, ${g.coop ? 'your line' : 'drawn'}, ${line.stations.length} stops${line.loop ? ', loop' : ''}${g.selectedLine === line.id ? ', selected' : ''}`);
+        b.title = `Line ${LINE_NAMES[i]}${g.coop ? ': your solid line' : ''}`;
         b.setAttribute('aria-pressed', String(g.selectedLine === line.id));
         b.addEventListener('click', () => { if (!interactive()) return; if (g.placing) stopPlacement(g); selectLine(g.selectedLine === line.id ? null : line.id); });
         ui.pills.appendChild(b);
@@ -1924,6 +2017,7 @@
     }
     const sel = lineById(g, g.selectedLine);
     ui.btnRemoveLine.hidden = !sel || sel.owner !== me || !!g.placing || extreme(g);
+    ui.trayBox.classList.toggle('has-remove', !ui.btnRemoveLine.hidden);
     if (sel) ui.btnRemoveLine.textContent = `Remove line ${LINE_NAMES[sel.color]}`;
   }
   function renderHud() {
@@ -1945,7 +2039,7 @@
     const showFrame = paused && g.started && !g.over;
     ui.pauseFrame.hidden = !showFrame; ui.pauseTab.hidden = !showFrame;
     canvas.classList.toggle('dim', showFrame);
-    const key = [g.depots.map((d) => [d.linesAvail, d.linesTotal, d.locosAvail, d.carriagesAvail, d.interchangesAvail, d.tunnelsTotal, d.tunnelsUsed].join('.')).join(';'), g.tunnelsTotal, g.tunnelsUsed, g.placing, g.selectedLine, g.lines.map((l) => l.color + (l.loop ? 'o' : '') + l.stations.length).join(',')].join('|');
+    const key = [g.coop, me, myLabel(), partnerLabel(), g.depots.map((d) => [d.linesAvail, d.linesTotal, d.locosAvail, d.carriagesAvail, d.interchangesAvail, d.tunnelsTotal, d.tunnelsUsed].join('.')).join(';'), g.tunnelsTotal, g.tunnelsUsed, g.placing, g.selectedLine, g.lines.map((l) => l.color + (l.loop ? 'o' : '') + l.stations.length).join(',')].join('|');
     if (key !== hudKey) { hudKey = key; renderTray(g); }
     if (g.started) setCoach(coachFor(g));
   }
@@ -2049,10 +2143,10 @@
     // lines, chevrons, caps
     for (const line of g.lines) {
       const col = LC(line.color);
-      drawPath(ctx, line.path, col, CFG.lineWidth);
+      drawPath(ctx, line.path, col, CFG.lineWidth, g.coop && line.owner !== me ? PARTNER_DASH : null);
       if (line.loop) {
         ctx.save(); ctx.globalAlpha *= 0.55; ctx.strokeStyle = theme.bg; ctx.lineWidth = 2; ctx.lineCap = 'round';
-        for (let d = 60; d < line.total; d += 120) { const p = pointAt(line, d); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); ctx.beginPath(); ctx.moveTo(-4, -4); ctx.lineTo(0, 0); ctx.lineTo(-4, 4); ctx.stroke(); ctx.restore(); }
+        for (let d = 60; d < line.cum[line.cum.length - 1]; d += 120) { const p = pointAtScreen(line, d); ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); ctx.beginPath(); ctx.moveTo(-4, -4); ctx.lineTo(0, 0); ctx.lineTo(-4, 4); ctx.stroke(); ctx.restore(); }
         ctx.restore();
       }
       if (line === sel && sel.owner === me) continue;
@@ -2062,6 +2156,21 @@
         ctx.lineWidth = CFG.lineWidth; ctx.beginPath(); ctx.moveTo(cap.sx, cap.sy); ctx.lineTo(cap.x, cap.y); ctx.stroke();
         ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(cap.x - cap.uy * 10, cap.y + cap.ux * 10); ctx.lineTo(cap.x + cap.uy * 10, cap.y - cap.ux * 10); ctx.stroke();
         ctx.restore();
+      }
+    }
+    // Stagger badges along shared segments so side-by-side lines keep readable letters.
+    if (g.coop) for (const line of g.lines) {
+      const N = line.stations.length, segCount = line.loop ? N : N - 1;
+      for (let i = 0; i < segCount; i++) {
+        const a = line.stationDist[i], b = i + 1 < N ? line.stationDist[i + 1] : line.total;
+        const sa = line.screenStationDist[i], sb = i + 1 < N ? line.screenStationDist[i + 1] : line.cum[line.cum.length - 1];
+        if (sb - sa < 64) continue;
+        const from = line.stations[i], to = line.stations[(i + 1) % N];
+        const slots = pairSlots.get(pairKey(from, to)) || [line.id];
+        const off = (slots.indexOf(line.id) - (slots.length - 1) / 2) * 24 * (from < to ? 1 : -1);
+        const screenOff = Math.max(-(sb - sa) / 2 + 24, Math.min((sb - sa) / 2 - 24, off));
+        const p = pointAt(line, (a + b) / 2 + screenOff * (b - a) / (sb - sa));
+        textBox(ctx, LINE_NAMES[line.color], p.x, p.y, LC(line.color), theme.dark ? theme.bg : '#ffffff', F(800, 11), 4, 'center');
       }
     }
     // first-run coach line
@@ -2104,9 +2213,7 @@
       const line = lineById(g, tr.lineId); if (!line || line.path.length < 2) continue;
       const col = LC(line.color);
       for (let k = 0; k < tr.cars; k++) {
-        let d = tr.dist - tr.dir * 34 * k;
-        if (!line.loop) d = Math.max(0, Math.min(line.total, d));
-        const p = pointAt(line, d);
+        const p = trainCarPosition(line, tr, k);
         if (g.placing === 'carriage' && line.owner === me) dashedTarget(p.x, p.y);
         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ang); if (tr.dir < 0) ctx.rotate(Math.PI);
         ctx.fillStyle = col; ctx.fillRect(-15, -7, 30, 14);
@@ -2203,11 +2310,21 @@
   }
 
   // ---------- resize ----------
+  function fitMapToTray(reproject = true) {
+    // The bottom stack's height is stable (legend, tray, safe-area padding; messages sit out of flow), so this only
+    // changes on rotation, resize or when the legend appears. Add room for a station's crowding ring.
+    const rect = bottomEl.getBoundingClientRect();
+    const inset = rect.height ? Math.ceil(H - rect.top + CFG.stationR * 1.3 + 13 + 8) : 0;
+    if (inset === mapBottomInset) return;
+    mapBottomInset = inset;
+    if (reproject && G) { syncScreen(G); rebuildAll(G); }
+  }
   function resize() {
     W = window.innerWidth; H = window.innerHeight; DPR = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    fitMapToTray(false);
     // positions are re-projected from the game's reference layout, so repeated resizes never drift
     if (G) { syncScreen(G); rebuildAll(G); }
   }
@@ -2265,16 +2382,18 @@
     else if (m.t === 'waiting') netUi.status.textContent = net.room ? 'Waiting for your friend to open the link.' : 'Looking for another player. This can take a moment.';
     else if (m.t === 'name') partnerName = cleanName(m.name) || 'Partner';
     else if (m.t === 'matched') {
-      me = m.me === 1 ? 1 : 0; net.paired = true;
+      // The seat is only taken up when the shared game begins: until then G is still the solo game behind the
+      // start screen, which has one depot, and the HUD must keep reading it as player 0.
+      net.seat = m.me === 1 ? 1 : 0; net.paired = true;
       netSend({ t: 'name', name: playerName });
-      if (me === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: pick.city, seed, mode: pick.mode }); beginCoop(pick.city, seed, pick.mode); }
+      if (net.seat === 0) { const seed = (Math.random() * 1e9) | 0; netSend({ t: 'start', city: pick.city, seed, mode: pick.mode }); beginCoop(pick.city, seed, pick.mode); }
       else netUi.status.textContent = `${pick.mode === 'rivals' ? 'Rival' : 'Partner'} found. Starting.`;
     }
-    else if (m.t === 'start' && me === 1 && CITIES[m.city]) { pick.mode = m.mode === 'rivals' ? 'rivals' : 'coop'; beginCoop(m.city, m.seed | 0, pick.mode); }
+    else if (m.t === 'start' && net.seat === 1 && CITIES[m.city]) { pick.mode = m.mode === 'rivals' ? 'rivals' : 'coop'; beginCoop(m.city, m.seed | 0, pick.mode); }
     else if (m.t === 'gone') onNetLost();
   }
   function beginCoop(city, seed, mode) {
-    resetTurns(); netUi.ov.hidden = true;
+    resetTurns(); netUi.ov.hidden = true; me = net.seat;
     launch(city, mode, seed, false);
     toast(`You are ${myLabel()} · you draw ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}`);
     announce(`${MODES[mode].name} started. You are player ${me + 1} and draw lines ${colorsOf(G, me).map((i) => LINE_NAMES[i]).join(', ')}.`, false);
@@ -2297,7 +2416,7 @@
     // the two online modes queue separately, so a co-op seeker is never paired with a rival
     try { ws = new WebSocket(`${RELAY_URL.replace(/\/$/, '')}/ws?room=${encodeURIComponent(room || MODES[pick.mode].queue || 'public')}`); }
     catch (e) { netUi.status.textContent = 'The matchmaking server address is not valid.'; return; }
-    net = { ws, room, paired: false, lost: false, lastSeen: performance.now(), hb: 0 }; resetTurns();
+    net = { ws, room, seat: 0, paired: false, lost: false, lastSeen: performance.now(), hb: 0 }; resetTurns();
     ws.onmessage = onNetMessage;
     ws.onclose = () => { if (net && net.ws === ws) onNetLost(); };
     ws.onerror = () => { if (net && net.ws === ws) onNetLost(); };
@@ -2345,13 +2464,15 @@
     ['Tunnels.', 'Crossing a river spends one tunnel; the preview shows the cost at the crossing. Retracting a crossing gives it back. The budget sits at the right end of the tray. Dry Basin has no river.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 22 L40 22" stroke-width="10" stroke="var(--river-bank)"/><path d="M22 6 L22 38" stroke-width="3"/><rect x="14" y="12" width="16" height="20" stroke-width="2" opacity="0.6"/></svg>'],
     ['Crowding.', 'More than 6 waiting (12 at an interchange) starts a red ring. It closes in 40 seconds; when it does, the network shuts down. Anything red on the map needs you now.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3"><circle cx="22" cy="22" r="8"/><path d="M22 6 A16 16 0 0 1 38 22" stroke="var(--accent)" stroke-width="4"/><rect x="30" y="6" width="10" height="10" fill="var(--accent)" stroke="none"/></svg>'],
     ['Mondays.', 'Every Monday you receive a locomotive and choose one: a new line, a carriage, an interchange, or two tunnels. The map pauses while you decide.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="8" y="10" width="28" height="26"/><path d="M8 18 H36 M16 6 V12 M28 6 V12"/><rect x="14" y="23" width="6" height="6" fill="currentColor" stroke="none"/></svg>'],
-    ['Co-op.', 'Find a partner online, or send a friend the link. The host draws lines A to D and the guest E to H on one shared city; stations, tunnels and the game over are shared. Both get a locomotive every Monday and take turns choosing the upgrade. Passengers change trains wherever your lines meet.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 32 L18 20 L30 20"/><path d="M38 12 L26 24 L14 24"/><circle cx="6" cy="32" r="4" fill="var(--bg)"/><circle cx="38" cy="12" r="4" fill="var(--bg)"/></svg>'],
+    ['Co-op.', 'Find a partner online, or send a friend the link. You draw solid lines; your partner draws dashed lines. The legend above the tray names each set of letters. Stations, tunnels and the game over are shared. Both get a locomotive every Monday and take turns choosing the upgrade. Passengers change trains wherever your lines meet.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 32 L18 20 L30 20"/><path d="M38 12 L26 24 L14 24" stroke-dasharray="5 7"/><circle cx="6" cy="32" r="4" fill="var(--bg)"/><circle cx="38" cy="12" r="4" fill="var(--bg)"/></svg>'],
+    ['Shared routes.', 'In both two-player modes, passengers board the first arriving train with room that heads toward their destination, regardless of its owner. Arrivals in the same simulation step are handled in train creation order. Your lines stay solid and the other player\'s stay dashed in Rivals too; points go to the destination station\'s owner.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 17 H38"/><path d="M6 27 H38" stroke-dasharray="5 7"/><circle cx="6" cy="22" r="5" fill="var(--bg)"/><circle cx="38" cy="22" r="5" fill="var(--bg)"/></svg>'],
     ['Rivals.', 'Two browsers, one city. Stations alternate owners; a delivery at your station is your point. Overflow at your station and you lose.', '<svg viewBox="0 0 44 44" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="13" cy="24" r="8" fill="var(--own-a)"/><rect x="24" y="12" width="15" height="15" fill="var(--own-b)"/><path d="M21 24 L24 24" stroke-width="3"/></svg>'],
   ];
   { const ul = $('rulesList'); for (const [lead, t, ic] of RULES) { const li = document.createElement('li'); li.innerHTML = `${ic}<span><b>${lead}</b> ${t}</span>`; ul.appendChild(li); } }
 
   // ---------- main loop ----------
   const hudEl = $('hud'), bottomEl = $('bottom');
+  new ResizeObserver(() => fitMapToTray()).observe(bottomEl, { box: 'border-box' });
   // In co-op the reward card halts both peers (it is shared state); help and token placement only halt solo play.
   function halted(g) { return g.paused || g.modal === 'reward' || (!g.coop && (g.modal === 'help' || !!g.placing)); }
   function runSteps(g, n) { for (let i = 0; i < n; i++) { if (g.over || halted(g)) return; tick(g, STEP * g.speed); } }

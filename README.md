@@ -25,10 +25,11 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 - **Select a line**: tap it on the map, tap its letter in the tray, or press its letter key. A selected line shows handles: a lettered square at each end (drag to extend, back onto the previous stop to retract, onto the other end to close a loop), a hollow square at each segment midpoint (drag onto a station to add it as a stop), and a small square above each middle stop (drag it away to bypass that stop). Loop trains run one way and 25% faster; long-press or right-click a loop segment to open it.
 - **Remove a line**: select it and use **Remove line**, or press Delete. Its train goes back to the depot.
 - **Rivers**: every crossing spends a tunnel. The drag preview prices each crossing at the river and turns red when the budget would run out. Retracting a crossing refunds it. The budget sits at the right end of the tray.
-- **Passengers** board only trains heading toward a station that brings them closer, and change lines where lines meet. Rare shapes draw demand from the whole map. A hollow passenger glyph has no route yet.
+- **Passengers** board the first arriving train with room that heads toward a station that brings them closer, and change lines where lines meet. This also applies when both players connect the same stations: passengers do not prefer either owner's train. Arrivals in the same simulation step are handled in train creation order, so the earlier-created train boards first. Rare shapes draw demand from the whole map. A hollow passenger glyph has no route yet.
 - **Crowding**: more than 6 waiting passengers (12 at an interchange) starts a red ring, with a ripple the moment it begins and a count badge from 8. When the ring closes, the game ends. Interchanges also halve stopping time. Red on the map always means "needs you now": no line is red.
 - **Every Monday** you receive a locomotive and choose one of three upgrades: a new line, a carriage (+6 seats, tap the train you want it on), an interchange, or two tunnels. A new locomotive joins its line where the gap between trains is widest. The map pauses while you decide and while you place. In Co-op the players take turns choosing; in Rivals each chooses for themselves and the card waits for both.
 - **Recap**: the end card shows the top line, the busiest station, the longest and average wait, and your best for that city and mode. Co-op adds how many each player carried; Rivals adds each player's score and station count instead of a best.
+- **Two-player lines**: your routes are solid and the other player's routes are dashed, in both Co-op and Rivals. The legend above the tray shows your letters and the other player's name and letters; letter badges on the map identify individual lines. Its blue and pink tints also match station ownership in Rivals.
 - **Co-op etiquette**: passengers change lines wherever your lines meet your partner's, so build a shared interchange early. You can select a partner's line to read its stop and train count, but only they can edit it.
 - **Rivals tactics**: every line you draw carries passengers to your rival's stations too, and each of those is their point; hold back and your own stations crowd. Get passengers out of your stations first, then bring passengers in. Your own crowding station shows the red ring and count badge; a rival's shows the ring with an ink badge naming them, since it is theirs to fix, and the coach tells you whether to leave it or draw there and take the deliveries.
 - **Keep in depot** during placement skips just that item and moves on to the next one; tap its token in the tray to place it later.
@@ -38,8 +39,14 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 ## Notes
 
 - Shared segments are drawn side by side; trains follow the offset path.
+- The map is fitted above the bottom tray (and the ownership legend in two-player games), with room for a crowding ring, so no station is ever hidden behind the controls. The tray's height is fixed: toasts, the placement banner and **Remove line** appear inside the coach row on phones and in a reserved strip above the tray on wide screens, so the map never shifts while you play.
+- Train travel uses the reference map, so resizing or opening controls does not change arrival times or either player's simulation.
 - Best scores, the mute setting and your online player name are kept in `localStorage` (per browser).
 - Light and dark themes follow the system setting, or pick one from the phone menu (remembered per browser).
+
+## Checks
+
+Run the simulation regression tests with `node tests/transit.test.cjs`. They cover matching arrivals across screen sizes, shared-route boarding, loops and carriage spacing.
 
 ## License
 
