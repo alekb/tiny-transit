@@ -40,6 +40,7 @@ Single file, no build step, no dependencies. Open `index.html` in a browser, or 
 
 - Shared segments are drawn side by side; trains follow the offset path.
 - The map is fitted above the bottom tray (and the ownership legend in two-player games), with room for a crowding ring, so no station is ever hidden behind the controls. The tray's height is fixed: toasts, the placement banner and **Remove line** appear inside the coach row on phones and in a reserved strip above the tray on wide screens, so the map never shifts while you play.
+- Shared maps (the daily, Co-op and Rivals) are laid out once and fitted to each screen, turned on its side in portrait. To keep stations apart on phones, horizontal gaps count for less when stations are spaced, which widens the tightest phone gaps by about a fifth without changing desktop maps. Short landscape screens get a compact top bar and leave out the ownership legend. A station near the right edge queues its passengers to its left so none run off screen.
 - Train travel uses the reference map, so resizing or opening controls does not change arrival times or either player's simulation.
 - Best scores, the mute setting and your online player name are kept in `localStorage` (per browser).
 - Light and dark themes follow the system setting, or pick one from the phone menu (remembered per browser).

@@ -334,6 +334,14 @@
     @media (prefers-reduced-motion: no-preference) { #overOv.sheet .card { animation: sheetin 220ms cubic-bezier(.2,.7,.2,1); } @keyframes sheetin { from { transform: translateY(100%); } to { transform: none; } } }
   }
   @media (max-height: 520px) and (orientation: landscape) {
+    /* every pixel of height is map here: a compact HUD, and no ownership legend (dashed lines and pills show it) */
+    #hud { padding-top: calc(env(safe-area-inset-top, 0px) + 8px); }
+    .score { font-size: 28px; }
+    .sub { font-size: 12px; }
+    .clock { width: 32px; height: 32px; }
+    .seg, .btn { height: 34px; }
+    .btn.icon { width: 34px; }
+    #lineOwners { display: none !important; }
     #bottom { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
     #trayBox { --slot: 14px; gap: 6px; }
     #tray { height: auto; flex-direction: row; }
@@ -530,9 +538,20 @@
   const PAD = { top: 84, side: 24 };
   // What a solo map keeps clear at the bottom: the tray's fixed height plus room for a crowding ring (see fitMapToTray).
   const padBottomFor = (w) => (w < 720 ? 220 : 166);
-  const padBottom = () => Math.max(padBottomFor(W), mapBottomInset);
+  // the measured stack when there is one (fitMapToTray), the fixed estimate before the tray is first laid out
+  const padBottom = () => mapBottomInset || padBottomFor(W);
   // The fixed layout the daily and two-player maps are generated on; its numbers never change with the UI.
   const REF = { W: 1280, H: 800, pb: 130 };
+  // Shared maps (daily, Co-op, Rivals) are drawn squeezed on phones: in portrait the reference map's long side lands on
+  // the screen's height, so horizontal gaps shrink most. Counting them at 0.8 when spacing stations keeps phone gaps
+  // about a fifth wider without changing desktop maps (it skips under 1% of spawns before day 21).
+  const FIXED_SPREAD_X = 0.8;
+  // Short landscape screens use a compact HUD (see the CSS), so the map may start higher there.
+  const shortLandscape = () => H <= 520 && W > H;
+  const mapTop = () => (shortLandscape() ? 60 : PAD.top);
+  // A station's waiting queue runs six glyphs (about 75 px) to its right; near the right edge it runs left instead.
+  const queueDir = (st) => (st.x + CFG.stationR * 1.3 + 75 > W - 4 ? -1 : 1);
+  const queueX = (st, r, col) => { const d = queueDir(st); return st.x + d * (r + 20.5 + col * 10); };
   const isPhone = () => W < 720;
   // Fixed-step simulation. Co-op groups steps into lockstep turns; solo runs the same steps straight from the clock.
   const STEP = 1 / 60, STEPS_PER_TURN = 6, TURN_MS = 100, INPUT_DELAY = 2, SYNC_EVERY = 20;
@@ -731,7 +750,7 @@
     const r = g.ref;
     const u = (p.x - PAD.side) / Math.max(1, r.W - 2 * PAD.side), v = (p.y - PAD.top) / Math.max(1, r.H - PAD.top - r.pb);
     const a = r.transpose ? v : u, b = r.transpose ? u : v;
-    return { x: PAD.side + a * Math.max(1, W - 2 * PAD.side), y: PAD.top + b * Math.max(1, H - PAD.top - padBottom()) };
+    return { x: PAD.side + a * Math.max(1, W - 2 * PAD.side), y: mapTop() + b * Math.max(1, H - mapTop() - padBottom()) };
   }
   function syncScreen(g) {
     for (const st of g.stations) { const p = toScreen(g, { x: st.rx, y: st.ry }); st.x = p.x; st.y = p.y; }
@@ -932,10 +951,11 @@
     const bottom = rh - pb;
     const cx = rw / 2, cy = (PAD.top + bottom) / 2;
     const rx = Math.max(40, (rw / 2 - PAD.side) * f), ry = Math.max(40, ((bottom - PAD.top) / 2) * f);
+    const kx = g.fixed ? FIXED_SPREAD_X : 1;
     for (let i = 0; i < 120; i++) {
       const x = cx + (rng(g) * 2 - 1) * rx, y = cy + (rng(g) * 2 - 1) * ry;
       const minD = i < 60 ? 95 : 72;
-      if (g.stations.some((s) => Math.hypot(s.rx - x, s.ry - y) < minD)) continue;
+      if (g.stations.some((s) => Math.hypot((s.rx - x) * kx, s.ry - y) < minD)) continue;
       if (nearRiver(g, x, y, CFG.riverClear)) continue;
       // steering clear of drawn lines depends on the player, so the daily skips it
       if (!g.fixed && i < 90) { const sp = toScreen(g, { x, y }); if (nearAnyLine(g, sp.x, sp.y, 30)) continue; }
@@ -1254,7 +1274,7 @@
   const waitLabel = (secs) => { const h = hoursOf(secs); return h >= 24 ? `${Math.floor(h / 24)} day${Math.floor(h / 24) === 1 ? '' : 's'} ${h % 24} h` : `${h} h`; };
   const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   function giveUp(g, st, gone) {
-    for (let i = 0; i < gone.length; i++) g.leavers.push({ x: st.x + CFG.stationR + 16 + (i % 6) * 10, y: st.y - 4 + Math.floor(i / 6) * 10, d: gone[i].d, t: 0, sid: st.id });
+    for (let i = 0; i < gone.length; i++) g.leavers.push({ x: queueX(st, CFG.stationR, i % 6), y: st.y - 4 + Math.floor(i / 6) * 10, d: gone[i].d, t: 0, sid: st.id, dir: queueDir(st) });
     g.floats.push({ x: st.x, y: st.y - 30, t: 0, text: `−${gone.length} gave up`, kind: 'giveup' });
     announce(`${gone.length} passengers gave up at the ${st.shape} station`, false);
   }
@@ -2265,18 +2285,18 @@
       ctx.fillStyle = g.rivals && st.owner != null ? theme.own[st.owner] : theme.bg; ctx.strokeStyle = theme.ink; ctx.lineWidth = 3; ctx.lineJoin = 'round';
       shapePath(ctx, st.shape, st.x, st.y, r); ctx.fill(); ctx.stroke();
       if (st.interchange) { ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(st.x, st.y, 5, 0, Math.PI * 2); ctx.stroke(); }
-      const x0 = st.x + r + 16 + 4.5, y0 = st.y - 5, faded = fadeStop === st.id;
+      const y0 = st.y - 5, faded = fadeStop === st.id;
       if (faded) ctx.globalAlpha = base * 0.4;
       st.passengers.forEach((p, i) => {
         const reachable = g.rides[p.d].has(st.id);
-        shapePath(ctx, p.d, x0 + (i % 6) * 10, y0 + Math.floor(i / 6) * 10, 4);
+        shapePath(ctx, p.d, queueX(st, r, i % 6), y0 + Math.floor(i / 6) * 10, 4);
         if (reachable) { ctx.fillStyle = theme.ink; ctx.fill(); } else { ctx.save(); ctx.strokeStyle = theme.ink; ctx.lineWidth = 1.5; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.restore(); }
       });
       ctx.globalAlpha = base;
       if (st.passengers.length >= 8) {
         const R = CFG.stationR * (st.interchange ? 1.3 : 1) + 13, bx = st.x + R * Math.SQRT1_2, by = st.y - R * Math.SQRT1_2;
         // a rival's crowding is theirs to fix, so its badge is ink, not the "needs you now" red
-        if (g.rivals && st.owner !== me) textBox(ctx, `${partnerLabel()} · ${st.passengers.length}`, bx - 9, by, theme.ink, theme.bg, F(800, 11), 5, 'left');
+        if (g.rivals && st.owner !== me) { const right = queueDir(st) < 0; textBox(ctx, `${partnerLabel()} · ${st.passengers.length}`, right ? st.x - R * Math.SQRT1_2 + 9 : bx - 9, by, theme.ink, theme.bg, F(800, 11), 5, right ? 'right' : 'left'); }
         else {
           ctx.fillStyle = theme.accent; ctx.fillRect(bx - 9, by - 9, 18, 18);
           ctx.fillStyle = '#ffffff'; ctx.font = F(800, 11); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(st.passengers.length), bx, by + 0.5);
@@ -2286,7 +2306,7 @@
     };
     for (const st of g.stations) if (st !== failed) drawStation(st);
     // leaving passengers (endless)
-    for (const lv of g.leavers) { const k = lv.t / 0.7; ctx.save(); ctx.globalAlpha *= 1 - k; ctx.fillStyle = theme.ink; shapePath(ctx, lv.d, lv.x + 12 * k, lv.y - 12 * k, 4); ctx.fill(); ctx.restore(); }
+    for (const lv of g.leavers) { const k = lv.t / 0.7; ctx.save(); ctx.globalAlpha *= 1 - k; ctx.fillStyle = theme.ink; shapePath(ctx, lv.d, lv.x + (lv.dir || 1) * 12 * k, lv.y - 12 * k, 4); ctx.fill(); ctx.restore(); }
     // floats
     for (const f of g.floats) {
       const dur = f.kind === 'giveup' ? 1.2 : 0.9, k = Math.min(1, f.t / dur), ease = 1 - (1 - k) * (1 - k);
